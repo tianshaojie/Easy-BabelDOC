@@ -184,7 +184,7 @@ def determine_port(cli_port: Optional[int] = None) -> int:
     """Determine the preferred port for the server."""
     if cli_port is not None:
         return cli_port
-    return get_env_int("EASY_BABELDOC_PORT", 8000)
+    return get_env_int("EASY_BABELDOC_PORT", 58273)
 
 def determine_port_search_limit(cli_limit: Optional[int] = None) -> int:
     """Determine how many additional ports we should probe when encountering conflicts."""
