@@ -2,12 +2,16 @@ name: Build PyInstaller Bundles
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+    inputs:
+      tag:
+        description: "Release tag (for example v1.0.0)"
+        required: true
+      name:
+        description: "Release title (defaults to tag when omitted)"
+        required: false
+      notes:
+        description: "Release notes (supports Markdown)"
+        required: false
 
 jobs:
   package:
@@ -55,9 +59,39 @@ jobs:
         working-directory: backend
         run: pyinstaller main.spec --clean
 
-      - name: Archive bundle
+      - name: Package bundle
+        run: |
+          python - <<'PY'
+import pathlib
+import shutil
+
+archive = pathlib.Path(f"Easy-BabelDOC-${{ matrix.os }}")
+shutil.make_archive(str(archive), "zip", "backend/dist")
+PY
+
+      - name: Upload archive
         uses: actions/upload-artifact@v4
         with:
           name: Easy-BabelDOC-${{ matrix.os }}
-          path: |
-            backend/dist/**
+          path: Easy-BabelDOC-${{ matrix.os }}.zip
+
+  release:
+    name: Publish Release
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List downloaded files
+        run: ls -R artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag }}
+          name: ${{ github.event.inputs.name || github.event.inputs.tag }}
+          body: ${{ github.event.inputs.notes }}
+          files: artifacts/**/*
