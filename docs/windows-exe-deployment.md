@@ -86,6 +86,7 @@
   - `Easy-BabelDOC.exe`
   - `README_RUN_FIRST.txt`（说明默认端口、如何修改配置、常见问题）。
   - 可选：在首次运行时弹出提示（控制台或简单 GUI），介绍使用方式。
+- GitHub 仓库可通过 **Build PyInstaller Bundles** 工作流手动触发三平台构建：提交 release tag / 标题 / 说明后，流水线会自动上传三个系统的压缩包并创建 Release。
 - 如需在线更新，可考虑：
   - 提供版本号接口，让应用在启动时检查更新。
   - 使用第三方更新器（例如 WinSparkle）或手动引导用户重新下载。
