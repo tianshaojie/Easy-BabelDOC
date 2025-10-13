@@ -46,6 +46,9 @@
   4. 其他平台开发态：`~/.easy-babeldoc/`。
 - 启动时会确保 `uploads/`, `outputs/`, `glossaries/`, `translation_history.json` 所在目录存在，并在日志中打印选定路径。
 - 确保打包后的可执行文件具备写权限，并在启动时检测 / 创建所需目录。
+- 端口绑定策略：
+  - 默认监听 `0.0.0.0:8000`，可通过环境变量或 CLI 参数（`--host`, `--port`）覆盖。
+  - 程序会在端口被占用时向上尝试递增端口，最大尝试次数由 `EASY_BABELDOC_PORT_SEARCH_LIMIT` 或 `--port-search-limit` 控制，并在日志中提示最终选择的端口。
 
 #### 4. PyInstaller 打包命令
 1. 在干净的虚拟环境中安装依赖并进入 `backend/`：

@@ -21,6 +21,8 @@ Based on BabelDOC: https://github.com/funstory-ai/BabelDOC
 Source code: https://github.com/lijiapeng365/Easy-BabelDOC
 """
 
+import argparse
+import errno
 import logging
 from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +34,7 @@ import uuid
 import asyncio
 import copy
 import platform
+import socket
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -109,6 +112,22 @@ logger = logging.getLogger("easy_babeldoc")
 if not logger.handlers:
     logging.basicConfig(level=logging.INFO)
 
+def get_env_int(name: str, default: int) -> int:
+    """Return integer environment variable value with fallback."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            "Environment variable %s=%r is not a valid integer; falling back to %s",
+            name,
+            value,
+            default,
+        )
+        return default
+
 def resolve_backend_root() -> Path:
     """Return the directory containing this backend module."""
     return Path(__file__).resolve().parent
@@ -151,6 +170,51 @@ def determine_data_dir() -> Path:
         return Path(sys.executable).resolve().parent / "data"
 
     return Path.home() / ".easy-babeldoc"
+
+def determine_host(cli_host: Optional[str] = None) -> str:
+    """Determine which host the server should bind to."""
+    if cli_host:
+        return cli_host
+    env_host = os.environ.get("EASY_BABELDOC_HOST")
+    if env_host:
+        return env_host
+    return "0.0.0.0"
+
+def determine_port(cli_port: Optional[int] = None) -> int:
+    """Determine the preferred port for the server."""
+    if cli_port is not None:
+        return cli_port
+    return get_env_int("EASY_BABELDOC_PORT", 8000)
+
+def determine_port_search_limit(cli_limit: Optional[int] = None) -> int:
+    """Determine how many additional ports we should probe when encountering conflicts."""
+    if cli_limit is not None:
+        return max(cli_limit, 0)
+    return max(get_env_int("EASY_BABELDOC_PORT_SEARCH_LIMIT", 10), 0)
+
+def can_bind_port(host: str, port: int) -> bool:
+    """Check whether the given host/port is currently available for binding."""
+    try:
+        addr_infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        logger.error("Invalid host %s: %s", host, exc)
+        raise SystemExit(1)
+
+    bindable = False
+    for family, socktype, proto, _, sockaddr in addr_infos:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(sockaddr)
+                bindable = True
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                return False
+            if exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+                continue
+            raise
+
+    return bindable
 
 FRONTEND_STATIC_DIR = resolve_static_dir()
 FRONTEND_INDEX_FILE = FRONTEND_STATIC_DIR / "index.html"
@@ -330,8 +394,8 @@ try:
 except:
     print("BabelDOC initialization skipped (development mode)")
 
-@app.get("/")
-async def root():
+@app.get("/api")
+async def api_root():
     return {"message": "BabelDOC API Server", "version": "1.0.0"}
 
 @app.post("/api/upload")
@@ -859,6 +923,36 @@ async def get_file_stats():
     
     return stats
 
+def run_server(host: str, preferred_port: int, port_search_limit: int = 10) -> None:
+    """Start uvicorn with automatic fallback when the preferred port is occupied."""
+    import uvicorn
+    attempted_ports: List[int] = []
+    for offset in range(port_search_limit + 1):
+        port = preferred_port + offset
+        attempted_ports.append(port)
+        if not can_bind_port(host, port):
+            logger.warning("Port %s is in use. Trying next port...", port)
+            continue
+        try:
+            logger.info("Starting Easy-BabelDOC server on %s:%s", host, port)
+            uvicorn.run(app, host=host, port=port)
+            return
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            logger.warning("Port %s is in use. Trying next port...", port)
+            continue
+
+    min_port = attempted_ports[0]
+    max_port = attempted_ports[-1]
+    logger.error(
+        "Unable to find an open port in range %s-%s. "
+        "Set EASY_BABELDOC_PORT or use --port to pick a different starting port.",
+        min_port,
+        max_port,
+    )
+    raise SystemExit(1)
+
 if FRONTEND_STATIC_DIR.exists():
     logger.info("Serving frontend assets from %s", FRONTEND_STATIC_DIR)
     app.mount("/", StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")
@@ -877,5 +971,30 @@ else:
         }
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    parser = argparse.ArgumentParser(description="Run the Easy-BabelDOC backend server.")
+    parser.add_argument("--host", help="Host/IP to bind (default: EASY_BABELDOC_HOST or 0.0.0.0)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="Preferred port (default: EASY_BABELDOC_PORT or 8000)",
+    )
+    parser.add_argument(
+        "--port-search-limit",
+        type=int,
+        help="How many additional ports to probe when the preferred port is occupied "
+        "(default: EASY_BABELDOC_PORT_SEARCH_LIMIT or 10).",
+    )
+    cli_args = parser.parse_args()
+
+    host = determine_host(cli_args.host)
+    port = determine_port(cli_args.port)
+    port_search_limit = determine_port_search_limit(cli_args.port_search_limit)
+
+    logger.info(
+        "Starting Easy-BabelDOC with host=%s port=%s (search limit: %s)",
+        host,
+        port,
+        port_search_limit,
+    )
+
+    run_server(host, port, port_search_limit)
