@@ -1,6 +1,7 @@
 name: Build PyInstaller Bundles
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
