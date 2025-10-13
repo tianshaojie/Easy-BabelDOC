@@ -21,14 +21,21 @@ Based on BabelDOC: https://github.com/funstory-ai/BabelDOC
 Source code: https://github.com/lijiapeng365/Easy-BabelDOC
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
+import argparse
+import errno
+import logging
+from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import json
 import uuid
 import asyncio
+import copy
+import platform
+import socket
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -101,6 +108,129 @@ except ImportError:
 
 app = FastAPI(title="BabelDOC API", version="1.0.0")
 
+logger = logging.getLogger("easy_babeldoc")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+
+def get_env_int(name: str, default: int) -> int:
+    """Return integer environment variable value with fallback."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            "Environment variable %s=%r is not a valid integer; falling back to %s",
+            name,
+            value,
+            default,
+        )
+        return default
+
+def resolve_backend_root() -> Path:
+    """Return the directory containing this backend module."""
+    return Path(__file__).resolve().parent
+
+def resolve_static_dir() -> Path:
+    """Locate the compiled frontend assets directory."""
+    candidates = []
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass) / "static" / "dist")
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / "static" / "dist")
+
+    backend_root = resolve_backend_root()
+    candidates.append(backend_root / "static" / "dist")
+    candidates.append(Path.cwd() / "backend" / "static" / "dist")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return backend_root / "static" / "dist"
+
+def determine_data_dir() -> Path:
+    """Determine a writable directory for runtime data."""
+    env_dir = os.environ.get("EASY_BABELDOC_DATA_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser()
+
+    system_name = platform.system().lower()
+    if system_name == "windows":
+        base_dir = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        if base_dir:
+            return Path(base_dir) / "Easy-BabelDOC"
+
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "data"
+
+    return Path.home() / ".easy-babeldoc"
+
+def determine_host(cli_host: Optional[str] = None) -> str:
+    """Determine which host the server should bind to."""
+    if cli_host:
+        return cli_host
+    env_host = os.environ.get("EASY_BABELDOC_HOST")
+    if env_host:
+        return env_host
+    return "0.0.0.0"
+
+def determine_port(cli_port: Optional[int] = None) -> int:
+    """Determine the preferred port for the server."""
+    if cli_port is not None:
+        return cli_port
+    return get_env_int("EASY_BABELDOC_PORT", 8000)
+
+def determine_port_search_limit(cli_limit: Optional[int] = None) -> int:
+    """Determine how many additional ports we should probe when encountering conflicts."""
+    if cli_limit is not None:
+        return max(cli_limit, 0)
+    return max(get_env_int("EASY_BABELDOC_PORT_SEARCH_LIMIT", 10), 0)
+
+def can_bind_port(host: str, port: int) -> bool:
+    """Check whether the given host/port is currently available for binding."""
+    try:
+        addr_infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        logger.error("Invalid host %s: %s", host, exc)
+        raise SystemExit(1)
+
+    bindable = False
+    for family, socktype, proto, _, sockaddr in addr_infos:
+        try:
+            with socket.socket(family, socktype, proto) as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(sockaddr)
+                bindable = True
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                return False
+            if exc.errno in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+                continue
+            raise
+
+    return bindable
+
+FRONTEND_STATIC_DIR = resolve_static_dir()
+FRONTEND_INDEX_FILE = FRONTEND_STATIC_DIR / "index.html"
+
+DATA_DIR = determine_data_dir()
+UPLOADS_DIR = DATA_DIR / "uploads"
+OUTPUTS_DIR = DATA_DIR / "outputs"
+GLOSSARIES_DIR = DATA_DIR / "glossaries"
+HISTORY_FILE = DATA_DIR / "translation_history.json"
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+for dir_path in [UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR]:
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+logger.info("Using data directory: %s", DATA_DIR)
+
 # CORS配置
 app.add_middleware(
     CORSMiddleware,
@@ -110,13 +240,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 创建必要的目录
-UPLOADS_DIR = Path("uploads")
-OUTPUTS_DIR = Path("outputs")
-GLOSSARIES_DIR = Path("glossaries")
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for the packaged application."""
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "frontend_ready": FRONTEND_STATIC_DIR.exists(),
+        "data_dir": str(DATA_DIR),
+    }
 
-for dir_path in [UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR]:
-    dir_path.mkdir(exist_ok=True)
+@app.exception_handler(404)
+async def spa_fallback(request: Request, exc: HTTPException):
+    """Serve the React SPA for unknown non-API routes."""
+    path = request.url.path
+    if (
+        request.method == "GET"
+        and FRONTEND_STATIC_DIR.exists()
+        and FRONTEND_INDEX_FILE.exists()
+        and not path.startswith(("/api", "/docs", "/redoc", "/openapi"))
+        and "." not in Path(path).name
+    ):
+        return FileResponse(FRONTEND_INDEX_FILE)
+
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 # 数据模型
 class TranslationRequest(BaseModel):
@@ -151,7 +298,7 @@ active_translations: Dict[str, Dict] = {}
 connected_clients: Dict[str, WebSocket] = {}
 
 # 历史记录文件路径
-HISTORY_FILE = Path("translation_history.json")
+SENSITIVE_CONFIG_KEYS = {"api_key"}
 
 # 加载历史记录
 def load_history() -> List[Dict]:
@@ -159,9 +306,19 @@ def load_history() -> List[Dict]:
     if HISTORY_FILE.exists():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                history = json.load(f)
         except:
             return []
+        sanitized_history = []
+        modified = False
+        for item in history:
+            sanitized = remove_sensitive_config(item)
+            if sanitized != item:
+                modified = True
+            sanitized_history.append(sanitized)
+        if modified:
+            save_history(sanitized_history)
+        return sanitized_history
     return []
 
 # 保存历史记录
@@ -195,18 +352,40 @@ def save_history(history):
         import traceback
         traceback.print_exc()
 
+def remove_sensitive_config(task: Dict[str, Any]) -> Dict[str, Any]:
+    """返回移除敏感配置后的任务副本"""
+    sanitized = copy.deepcopy(task)
+    config = sanitized.get("config")
+    if isinstance(config, dict):
+        for key in SENSITIVE_CONFIG_KEYS:
+            if key in config:
+                config.pop(key, None)
+    return sanitized
+
+def get_task(task_id: str) -> Optional[Dict[str, Any]]:
+    """从内存或历史记录获取任务信息"""
+    if task_id in active_translations:
+        return active_translations[task_id]
+    
+    history = load_history()
+    for task in history:
+        if task.get("task_id") == task_id:
+            return task
+    return None
+
 # 添加历史记录
 def add_to_history(task_data: Dict):
     """添加任务到历史记录"""
+    sanitized_task = remove_sensitive_config(task_data)
     history = load_history()
     # 检查是否已存在
     for i, item in enumerate(history):
-        if item.get('task_id') == task_data.get('task_id'):
-            history[i] = task_data
+        if item.get('task_id') == sanitized_task.get('task_id'):
+            history[i] = sanitized_task
             save_history(history)
             return
     # 新增记录
-    history.append(task_data)
+    history.append(sanitized_task)
     save_history(history)
 
 # 初始化BabelDOC
@@ -215,8 +394,8 @@ try:
 except:
     print("BabelDOC initialization skipped (development mode)")
 
-@app.get("/")
-async def root():
+@app.get("/api")
+async def api_root():
     return {"message": "BabelDOC API Server", "version": "1.0.0"}
 
 @app.post("/api/upload")
@@ -287,18 +466,20 @@ async def start_translation(request: TranslationRequest):
             glossaries=glossaries
         )
         
+        request_config = request.model_dump(exclude=SENSITIVE_CONFIG_KEYS)
+        
         # 记录翻译任务
         task_data = {
             "task_id": task_id,
             "status": "running",
-            "filename": request.model_dump().get('file_id', 'unknown') + '.pdf',
+            "filename": f"{request.file_id}.pdf",
             "source_lang": request.lang_in,
             "target_lang": request.lang_out,
             "model": request.model,
             "start_time": datetime.now().isoformat(),
             "progress": 0,
             "stage": "初始化",
-            "config": request.model_dump()
+            "config": request_config
         }
         
         active_translations[task_id] = task_data
@@ -376,10 +557,11 @@ async def run_translation(task_id: str, config):
 @app.get("/api/translation/{task_id}/status")
 async def get_translation_status(task_id: str):
     """获取翻译任务状态"""
-    if task_id not in active_translations:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    return active_translations[task_id]
+    return task
 
 @app.websocket("/api/translation/{task_id}/ws")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
@@ -397,10 +579,10 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
 @app.get("/api/translation/{task_id}/download/{file_type}")
 async def download_result(task_id: str, file_type: str):
     """下载翻译结果文件"""
-    if task_id not in active_translations:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    task = active_translations[task_id]
     if task["status"] != "completed":
         raise HTTPException(status_code=400, detail="翻译未完成")
     
@@ -741,6 +923,78 @@ async def get_file_stats():
     
     return stats
 
-if __name__ == "__main__":
+def run_server(host: str, preferred_port: int, port_search_limit: int = 10) -> None:
+    """Start uvicorn with automatic fallback when the preferred port is occupied."""
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    attempted_ports: List[int] = []
+    for offset in range(port_search_limit + 1):
+        port = preferred_port + offset
+        attempted_ports.append(port)
+        if not can_bind_port(host, port):
+            logger.warning("Port %s is in use. Trying next port...", port)
+            continue
+        try:
+            logger.info("Starting Easy-BabelDOC server on %s:%s", host, port)
+            uvicorn.run(app, host=host, port=port)
+            return
+        except OSError as exc:
+            if exc.errno != errno.EADDRINUSE:
+                raise
+            logger.warning("Port %s is in use. Trying next port...", port)
+            continue
+
+    min_port = attempted_ports[0]
+    max_port = attempted_ports[-1]
+    logger.error(
+        "Unable to find an open port in range %s-%s. "
+        "Set EASY_BABELDOC_PORT or use --port to pick a different starting port.",
+        min_port,
+        max_port,
+    )
+    raise SystemExit(1)
+
+if FRONTEND_STATIC_DIR.exists():
+    logger.info("Serving frontend assets from %s", FRONTEND_STATIC_DIR)
+    app.mount("/", StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")
+else:
+    logger.warning(
+        "Frontend build not found at %s. Only API routes will be available.",
+        FRONTEND_STATIC_DIR,
+    )
+
+    @app.get("/", include_in_schema=False)
+    async def root_placeholder():
+        return {
+            "message": "BabelDOC API Server",
+            "version": "1.0.0",
+            "frontend_ready": False,
+        }
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run the Easy-BabelDOC backend server.")
+    parser.add_argument("--host", help="Host/IP to bind (default: EASY_BABELDOC_HOST or 0.0.0.0)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        help="Preferred port (default: EASY_BABELDOC_PORT or 8000)",
+    )
+    parser.add_argument(
+        "--port-search-limit",
+        type=int,
+        help="How many additional ports to probe when the preferred port is occupied "
+        "(default: EASY_BABELDOC_PORT_SEARCH_LIMIT or 10).",
+    )
+    cli_args = parser.parse_args()
+
+    host = determine_host(cli_args.host)
+    port = determine_port(cli_args.port)
+    port_search_limit = determine_port_search_limit(cli_args.port_search_limit)
+
+    logger.info(
+        "Starting Easy-BabelDOC with host=%s port=%s (search limit: %s)",
+        host,
+        port,
+        port_search_limit,
+    )
+
+    run_server(host, port, port_search_limit)

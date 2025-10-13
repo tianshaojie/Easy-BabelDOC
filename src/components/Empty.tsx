@@ -1,9 +1,13 @@
-import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { toast } from "sonner"
 
 // Empty component
 export default function Empty() {
   return (
-    <div className={cn("flex h-full items-center justify-center")} onClick={() => toast('Coming soon')}>Empty</div>
-  );
+    <div
+      className="flex h-full items-center justify-center"
+      onClick={() => toast('Coming soon')}
+    >
+      Empty
+    </div>
+  )
 }

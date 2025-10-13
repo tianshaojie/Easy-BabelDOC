@@ -14,7 +14,6 @@
       "lang_in": "auto",
       "lang_out": "zh",
       "model": "deepseek-v3-250324",
-      "api_key": "ac04bb12-aaec-40cc-828b-cc768f95450c",
       "base_url": "https://ark.cn-beijing.volces.com/api/v3",
       "pages": "1",
       "qps": 1,
