@@ -21,15 +21,18 @@ Based on BabelDOC: https://github.com/funstory-ai/BabelDOC
 Source code: https://github.com/lijiapeng365/Easy-BabelDOC
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect
+import logging
+from fastapi import FastAPI, File, UploadFile, HTTPException, WebSocket, WebSocketDisconnect, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import json
 import uuid
 import asyncio
 import copy
+import platform
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -102,6 +105,68 @@ except ImportError:
 
 app = FastAPI(title="BabelDOC API", version="1.0.0")
 
+logger = logging.getLogger("easy_babeldoc")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO)
+
+def resolve_backend_root() -> Path:
+    """Return the directory containing this backend module."""
+    return Path(__file__).resolve().parent
+
+def resolve_static_dir() -> Path:
+    """Locate the compiled frontend assets directory."""
+    candidates = []
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        candidates.append(Path(meipass) / "static" / "dist")
+
+    if getattr(sys, "frozen", False):
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir / "static" / "dist")
+
+    backend_root = resolve_backend_root()
+    candidates.append(backend_root / "static" / "dist")
+    candidates.append(Path.cwd() / "backend" / "static" / "dist")
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return backend_root / "static" / "dist"
+
+def determine_data_dir() -> Path:
+    """Determine a writable directory for runtime data."""
+    env_dir = os.environ.get("EASY_BABELDOC_DATA_DIR")
+    if env_dir:
+        return Path(env_dir).expanduser()
+
+    system_name = platform.system().lower()
+    if system_name == "windows":
+        base_dir = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        if base_dir:
+            return Path(base_dir) / "Easy-BabelDOC"
+
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "data"
+
+    return Path.home() / ".easy-babeldoc"
+
+FRONTEND_STATIC_DIR = resolve_static_dir()
+FRONTEND_INDEX_FILE = FRONTEND_STATIC_DIR / "index.html"
+
+DATA_DIR = determine_data_dir()
+UPLOADS_DIR = DATA_DIR / "uploads"
+OUTPUTS_DIR = DATA_DIR / "outputs"
+GLOSSARIES_DIR = DATA_DIR / "glossaries"
+HISTORY_FILE = DATA_DIR / "translation_history.json"
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+for dir_path in [UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR]:
+    dir_path.mkdir(parents=True, exist_ok=True)
+
+logger.info("Using data directory: %s", DATA_DIR)
+
 # CORS配置
 app.add_middleware(
     CORSMiddleware,
@@ -111,13 +176,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 创建必要的目录
-UPLOADS_DIR = Path("uploads")
-OUTPUTS_DIR = Path("outputs")
-GLOSSARIES_DIR = Path("glossaries")
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint for the packaged application."""
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "frontend_ready": FRONTEND_STATIC_DIR.exists(),
+        "data_dir": str(DATA_DIR),
+    }
 
-for dir_path in [UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR]:
-    dir_path.mkdir(exist_ok=True)
+@app.exception_handler(404)
+async def spa_fallback(request: Request, exc: HTTPException):
+    """Serve the React SPA for unknown non-API routes."""
+    path = request.url.path
+    if (
+        request.method == "GET"
+        and FRONTEND_STATIC_DIR.exists()
+        and FRONTEND_INDEX_FILE.exists()
+        and not path.startswith(("/api", "/docs", "/redoc", "/openapi"))
+        and "." not in Path(path).name
+    ):
+        return FileResponse(FRONTEND_INDEX_FILE)
+
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 # 数据模型
 class TranslationRequest(BaseModel):
@@ -152,7 +234,6 @@ active_translations: Dict[str, Dict] = {}
 connected_clients: Dict[str, WebSocket] = {}
 
 # 历史记录文件路径
-HISTORY_FILE = Path("translation_history.json")
 SENSITIVE_CONFIG_KEYS = {"api_key"}
 
 # 加载历史记录
@@ -777,6 +858,23 @@ async def get_file_stats():
                         stats["total_files"] += 1
     
     return stats
+
+if FRONTEND_STATIC_DIR.exists():
+    logger.info("Serving frontend assets from %s", FRONTEND_STATIC_DIR)
+    app.mount("/", StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")
+else:
+    logger.warning(
+        "Frontend build not found at %s. Only API routes will be available.",
+        FRONTEND_STATIC_DIR,
+    )
+
+    @app.get("/", include_in_schema=False)
+    async def root_placeholder():
+        return {
+            "message": "BabelDOC API Server",
+            "version": "1.0.0",
+            "frontend_ready": False,
+        }
 
 if __name__ == "__main__":
     import uvicorn
