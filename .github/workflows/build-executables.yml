@@ -95,3 +95,4 @@ PY
           name: ${{ github.event.inputs.name || github.event.inputs.tag }}
           body: ${{ github.event.inputs.notes }}
           files: artifacts/**/*
+          
