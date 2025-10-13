@@ -29,6 +29,7 @@ import os
 import json
 import uuid
 import asyncio
+import copy
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
@@ -152,6 +153,7 @@ connected_clients: Dict[str, WebSocket] = {}
 
 # 历史记录文件路径
 HISTORY_FILE = Path("translation_history.json")
+SENSITIVE_CONFIG_KEYS = {"api_key"}
 
 # 加载历史记录
 def load_history() -> List[Dict]:
@@ -159,9 +161,19 @@ def load_history() -> List[Dict]:
     if HISTORY_FILE.exists():
         try:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                history = json.load(f)
         except:
             return []
+        sanitized_history = []
+        modified = False
+        for item in history:
+            sanitized = remove_sensitive_config(item)
+            if sanitized != item:
+                modified = True
+            sanitized_history.append(sanitized)
+        if modified:
+            save_history(sanitized_history)
+        return sanitized_history
     return []
 
 # 保存历史记录
@@ -195,18 +207,40 @@ def save_history(history):
         import traceback
         traceback.print_exc()
 
+def remove_sensitive_config(task: Dict[str, Any]) -> Dict[str, Any]:
+    """返回移除敏感配置后的任务副本"""
+    sanitized = copy.deepcopy(task)
+    config = sanitized.get("config")
+    if isinstance(config, dict):
+        for key in SENSITIVE_CONFIG_KEYS:
+            if key in config:
+                config.pop(key, None)
+    return sanitized
+
+def get_task(task_id: str) -> Optional[Dict[str, Any]]:
+    """从内存或历史记录获取任务信息"""
+    if task_id in active_translations:
+        return active_translations[task_id]
+    
+    history = load_history()
+    for task in history:
+        if task.get("task_id") == task_id:
+            return task
+    return None
+
 # 添加历史记录
 def add_to_history(task_data: Dict):
     """添加任务到历史记录"""
+    sanitized_task = remove_sensitive_config(task_data)
     history = load_history()
     # 检查是否已存在
     for i, item in enumerate(history):
-        if item.get('task_id') == task_data.get('task_id'):
-            history[i] = task_data
+        if item.get('task_id') == sanitized_task.get('task_id'):
+            history[i] = sanitized_task
             save_history(history)
             return
     # 新增记录
-    history.append(task_data)
+    history.append(sanitized_task)
     save_history(history)
 
 # 初始化BabelDOC
@@ -287,18 +321,20 @@ async def start_translation(request: TranslationRequest):
             glossaries=glossaries
         )
         
+        request_config = request.model_dump(exclude=SENSITIVE_CONFIG_KEYS)
+        
         # 记录翻译任务
         task_data = {
             "task_id": task_id,
             "status": "running",
-            "filename": request.model_dump().get('file_id', 'unknown') + '.pdf',
+            "filename": f"{request.file_id}.pdf",
             "source_lang": request.lang_in,
             "target_lang": request.lang_out,
             "model": request.model,
             "start_time": datetime.now().isoformat(),
             "progress": 0,
             "stage": "初始化",
-            "config": request.model_dump()
+            "config": request_config
         }
         
         active_translations[task_id] = task_data
@@ -376,10 +412,11 @@ async def run_translation(task_id: str, config):
 @app.get("/api/translation/{task_id}/status")
 async def get_translation_status(task_id: str):
     """获取翻译任务状态"""
-    if task_id not in active_translations:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    return active_translations[task_id]
+    return task
 
 @app.websocket("/api/translation/{task_id}/ws")
 async def websocket_endpoint(websocket: WebSocket, task_id: str):
@@ -397,10 +434,10 @@ async def websocket_endpoint(websocket: WebSocket, task_id: str):
 @app.get("/api/translation/{task_id}/download/{file_type}")
 async def download_result(task_id: str, file_type: str):
     """下载翻译结果文件"""
-    if task_id not in active_translations:
+    task = get_task(task_id)
+    if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
     
-    task = active_translations[task_id]
     if task["status"] != "completed":
         raise HTTPException(status_code=400, detail="翻译未完成")
     

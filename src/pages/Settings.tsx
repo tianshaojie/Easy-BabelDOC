@@ -122,8 +122,8 @@ const Settings = () => {
     const file = event.target.files?.[0]
     if (!file) return
 
-    if (!file.name.endsWith('.txt')) {
-      toast.error('请选择.txt格式的词汇表文件')
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      toast.error('请选择.csv格式的词汇表文件')
       return
     }
 
@@ -452,7 +452,7 @@ const Settings = () => {
             <div className="relative">
               <input
                 type="file"
-                accept=".txt"
+                accept=".csv"
                 onChange={handleGlossaryUpload}
                 disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -478,7 +478,7 @@ const Settings = () => {
           
           <div className="mb-4">
             <p className="text-sm text-gray-600">
-              支持.txt格式的词汇表文件，每行一个词条，格式：原文|译文
+              支持.csv格式的词汇表文件（UTF-8），可包含表头，示例：源文本,目标文本
             </p>
           </div>
           
