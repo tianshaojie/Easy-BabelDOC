@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, FileText, Settings, Play, Info } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface UploadedFile {
   file_id: string
@@ -117,7 +118,7 @@ const Home = () => {
     formData.append('file', file)
 
     try {
-      const response = await fetch('http://localhost:8000/api/upload', {
+      const response = await fetch(API_ENDPOINTS.upload, {
         method: 'POST',
         body: formData
       })
@@ -186,7 +187,7 @@ const Home = () => {
         base_url: config.base_url.trim() ? config.base_url.trim().replace(/\/$/, '') : ''
       }
 
-      const response = await fetch('http://localhost:8000/api/translate', {
+      const response = await fetch(API_ENDPOINTS.translate, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

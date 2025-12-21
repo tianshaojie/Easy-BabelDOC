@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { History as HistoryIcon, Clock, FileText, Download, Trash2, Eye, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface HistoryItem {
   task_id: string
@@ -44,7 +45,7 @@ const History = () => {
   const loadHistory = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/translations')
+      const response = await fetch(API_ENDPOINTS.translations)
       if (response.ok) {
         const data = await response.json()
         setHistory(data)
@@ -177,7 +178,7 @@ const History = () => {
     if (!window.confirm(`确定要删除选中的 ${selectedItems.length} 条记录吗？`)) return
     
     try {
-      const response = await fetch('http://localhost:8000/api/translations', {
+      const response = await fetch(API_ENDPOINTS.translations, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -212,7 +213,7 @@ const History = () => {
 
   const downloadResult = async (taskId: string, type: 'mono' | 'dual') => {
     try {
-      const response = await fetch(`http://localhost:8000/api/translation/${taskId}/download/${type}`)
+      const response = await fetch(API_ENDPOINTS.translationDownload(taskId, type))
       
       if (response.ok) {
         const blob = await response.blob()

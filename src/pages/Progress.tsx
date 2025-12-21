@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Activity as ProgressIcon, Clock, X, AlertCircle, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface TranslationStatus {
   status: string
@@ -33,7 +34,7 @@ const Progress = () => {
     fetchStatus()
 
     // 建立WebSocket连接
-    const ws = new WebSocket(`ws://localhost:8000/api/translation/${taskId}/ws`)
+    const ws = new WebSocket(API_ENDPOINTS.translationWs(taskId))
     
     ws.onopen = () => {
       setIsConnected(true)
@@ -72,7 +73,7 @@ const Progress = () => {
     if (!taskId) return
 
     try {
-      const response = await fetch(`http://localhost:8000/api/translation/${taskId}/status`)
+      const response = await fetch(API_ENDPOINTS.translationStatus(taskId))
       if (response.ok) {
         const data = await response.json()
         setStatus(data)

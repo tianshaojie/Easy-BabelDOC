@@ -9,6 +9,7 @@ import {
   FileText,
   BarChart3
 } from 'lucide-react'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface FileStats {
   total_files: number
@@ -46,7 +47,7 @@ const FileManager = () => {
   const loadStats = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:8000/api/files/stats')
+      const response = await fetch(API_ENDPOINTS.fileStats)
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -64,7 +65,7 @@ const FileManager = () => {
   const scanFiles = async () => {
     setScanning(true)
     try {
-      const response = await fetch('http://localhost:8000/api/files/cleanup', {
+      const response = await fetch(API_ENDPOINTS.fileCleanup, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -124,7 +125,7 @@ const FileManager = () => {
       console.log('Request body to be sent:', requestBody)
       console.log('JSON stringified body:', JSON.stringify(requestBody))
       
-      const response = await fetch('http://localhost:8000/api/files/cleanup', {
+      const response = await fetch(API_ENDPOINTS.fileCleanup, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

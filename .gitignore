@@ -8,6 +8,16 @@ pnpm-debug.log*
 lerna-debug.log*
 log
 
+# Process ID files
+*.pid
+.*.pid
+backend/*.pid
+backend/.*.pid
+
+# Hidden log files (from start.sh)
+.*.log
+backend/.*.log
+
 # Dependencies
 node_modules
 dist

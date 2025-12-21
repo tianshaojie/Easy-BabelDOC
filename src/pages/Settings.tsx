@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Settings as SettingsIcon, Key, Globe, Upload, Trash2, Save, Eye, EyeOff, TestTube, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface GlossaryItem {
   id: string
@@ -79,7 +80,7 @@ const Settings = () => {
 
   const loadGlossaries = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/glossaries')
+      const response = await fetch(API_ENDPOINTS.glossaries)
       if (response.ok) {
         const data = await response.json()
         setGlossaries(data)
@@ -133,7 +134,7 @@ const Settings = () => {
       const formData = new FormData()
       formData.append('file', file)
 
-      const response = await fetch('http://localhost:8000/api/glossary/upload', {
+      const response = await fetch(API_ENDPOINTS.glossaryUpload, {
         method: 'POST',
         body: formData
       })
@@ -159,7 +160,7 @@ const Settings = () => {
     if (!window.confirm('确定要删除这个词汇表吗？')) return
 
     try {
-      const response = await fetch(`http://localhost:8000/api/glossary/${glossaryId}`, {
+      const response = await fetch(API_ENDPOINTS.deleteGlossary(glossaryId), {
         method: 'DELETE'
       })
 

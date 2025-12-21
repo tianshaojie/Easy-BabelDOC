@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Download, FileText, Clock, MemoryStick, CheckCircle, AlertCircle, Home } from 'lucide-react'
 import { toast } from 'sonner'
+import { API_ENDPOINTS } from '@/config/api'
 
 interface TranslationResult {
   status: string
@@ -34,7 +35,7 @@ const Result = () => {
     if (!taskId) return
 
     try {
-      const response = await fetch(`http://localhost:8000/api/translation/${taskId}/status`)
+      const response = await fetch(API_ENDPOINTS.translationStatus(taskId))
       if (response.ok) {
         const data = await response.json()
         setResult(data)
@@ -60,7 +61,7 @@ const Result = () => {
     setDownloading(type)
     
     try {
-      const response = await fetch(`http://localhost:8000/api/translation/${taskId}/download/${type}`)
+      const response = await fetch(API_ENDPOINTS.translationDownload(taskId, type))
       
       if (response.ok) {
         const blob = await response.blob()
