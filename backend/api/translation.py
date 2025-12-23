@@ -243,17 +243,12 @@ async def list_translations():
 @router.delete("/translation/{task_id}")
 async def delete_translation(task_id: str):
     """删除翻译记录"""
-    from utils.history import load_history, save_history
+    from utils.history import delete_task
     
-    history = load_history()
-    original_length = len(history)
+    success = delete_task(task_id)
     
-    history = [item for item in history if item.get('task_id') != task_id]
-    
-    if len(history) == original_length:
+    if not success:
         raise HTTPException(status_code=404, detail="翻译记录不存在")
-    
-    save_history(history)
     
     if task_id in active_translations:
         del active_translations[task_id]
@@ -263,22 +258,16 @@ async def delete_translation(task_id: str):
 @router.delete("/translations")
 async def delete_multiple_translations(task_ids: List[str]):
     """批量删除翻译记录"""
-    from utils.history import load_history, save_history
+    from utils.history import delete_task
     
-    history = load_history()
-    original_length = len(history)
-    
-    history = [item for item in history if item.get('task_id') not in task_ids]
-    
-    deleted_count = original_length - len(history)
+    deleted_count = 0
+    for task_id in task_ids:
+        if delete_task(task_id):
+            deleted_count += 1
+            if task_id in active_translations:
+                del active_translations[task_id]
     
     if deleted_count == 0:
         raise HTTPException(status_code=404, detail="没有找到要删除的翻译记录")
-    
-    save_history(history)
-    
-    for task_id in task_ids:
-        if task_id in active_translations:
-            del active_translations[task_id]
     
     return {"message": f"已删除 {deleted_count} 条翻译记录"}

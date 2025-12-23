@@ -54,6 +54,7 @@ UPLOADS_DIR = DATA_DIR / "uploads"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 GLOSSARIES_DIR = DATA_DIR / "glossaries"
 HISTORY_FILE = DATA_DIR / "translation_history.json"
+DB_FILE = DATA_DIR / "babeldoc.db"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 for dir_path in [UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR]:
