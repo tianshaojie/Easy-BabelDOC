@@ -46,6 +46,9 @@ const Home = () => {
     debug: false,
     glossary_ids: []
   })
+  
+  const [enableMonoOutput, setEnableMonoOutput] = useState(true)
+  const [enableDualOutput, setEnableDualOutput] = useState(true)
 
   // 加载保存的设置
   useEffect(() => {
@@ -178,6 +181,14 @@ const Home = () => {
       return
     }
 
+    // 检查用户ID
+    const userId = authUtils.getUserId()
+    if (!userId) {
+      toast.error('认证失败，请刷新页面重试')
+      console.error('No user ID found')
+      return
+    }
+
     setIsTranslating(true)
 
     try {
@@ -201,6 +212,15 @@ const Home = () => {
       })
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // 认证失败，清除token并提示刷新
+          authUtils.logout()
+          toast.error('认证已过期，请刷新页面重试')
+          setTimeout(() => {
+            window.location.reload()
+          }, 1500)
+          return
+        }
         throw new Error('翻译启动失败')
       }
 
@@ -405,33 +425,30 @@ const Home = () => {
                 <label className="block text-sm font-medium text-gray-700">
                   输出选项
                 </label>
-                <div className="space-y-2">
+                <div className="flex items-center space-x-6">
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={config.no_dual}
-                      onChange={(e) => setConfig({ ...config, no_dual: e.target.checked })}
+                      checked={enableMonoOutput}
+                      onChange={(e) => {
+                        setEnableMonoOutput(e.target.checked)
+                        setConfig({ ...config, no_mono: !e.target.checked })
+                      }}
                       className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700">禁用双语输出</span>
+                    <span className="ml-2 text-sm text-gray-700">单语输出</span>
                   </label>
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={config.no_mono}
-                      onChange={(e) => setConfig({ ...config, no_mono: e.target.checked })}
+                      checked={enableDualOutput}
+                      onChange={(e) => {
+                        setEnableDualOutput(e.target.checked)
+                        setConfig({ ...config, no_dual: !e.target.checked })
+                      }}
                       className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700">禁用单语输出</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={config.debug}
-                      onChange={(e) => setConfig({ ...config, debug: e.target.checked })}
-                      className="rounded border-gray-300 text-pink-600 focus:ring-pink-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">调试模式</span>
+                    <span className="ml-2 text-sm text-gray-700">双语输出</span>
                   </label>
                 </div>
               </div>
