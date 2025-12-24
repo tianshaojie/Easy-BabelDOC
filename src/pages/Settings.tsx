@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Key, Globe, Upload, Trash2, Save, Eye, EyeOff, TestTube, X } from 'lucide-react'
+import { Settings as SettingsIcon, Key, Globe, Upload, Trash2, Save, Eye, EyeOff, TestTube, X, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
 
@@ -10,7 +10,10 @@ interface GlossaryItem {
   size: number
 }
 
+type TabType = 'model' | 'language' | 'glossary' | 'license'
+
 const Settings = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('model')
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
@@ -22,7 +25,8 @@ const Settings = () => {
   const [defaultQps, setDefaultQps] = useState(1)
   const [glossaries, setGlossaries] = useState<GlossaryItem[]>([])
   const [uploading, setUploading] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [savingModel, setSavingModel] = useState(false)
+  const [savingLanguage, setSavingLanguage] = useState(false)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const [showTestModal, setShowTestModal] = useState(false)
   const [testResults, setTestResults] = useState<{[key: string]: 'success' | 'error' | 'testing'}>({})
@@ -90,32 +94,43 @@ const Settings = () => {
     }
   }
 
-  const saveSettings = async () => {
-    setSaving(true)
+  const saveModelSettings = async () => {
+    setSavingModel(true)
     
     try {
-      // 验证自定义模型
       if (useCustomModel && !customModel.trim()) {
         toast.error('请输入自定义模型名称')
-        setSaving(false)
+        setSavingModel(false)
         return
       }
       
-      // 保存到localStorage
       localStorage.setItem('babeldoc_api_key', apiKey)
       localStorage.setItem('babeldoc_base_url', baseUrl)
-      localStorage.setItem('babeldoc_default_source_lang', defaultSourceLang)
-      localStorage.setItem('babeldoc_default_target_lang', defaultTargetLang)
       localStorage.setItem('babeldoc_default_model', useCustomModel ? customModel.trim() : defaultModel)
       localStorage.setItem('babeldoc_custom_model', customModel.trim())
       localStorage.setItem('babeldoc_use_custom_model', useCustomModel.toString())
       localStorage.setItem('babeldoc_default_qps', defaultQps.toString())
       
-      toast.success('设置已保存')
-    } catch (error) {
-      toast.error('保存设置失败')
+      toast.success('模型设置已保存')
+    } catch {
+      toast.error('保存模型设置失败')
     } finally {
-      setSaving(false)
+      setSavingModel(false)
+    }
+  }
+
+  const saveLanguageSettings = async () => {
+    setSavingLanguage(true)
+    
+    try {
+      localStorage.setItem('babeldoc_default_source_lang', defaultSourceLang)
+      localStorage.setItem('babeldoc_default_target_lang', defaultTargetLang)
+      
+      toast.success('语言设置已保存')
+    } catch {
+      toast.error('保存语言设置失败')
+    } finally {
+      setSavingLanguage(false)
     }
   }
 
@@ -230,7 +245,7 @@ const Settings = () => {
         } else {
           setTestResults(prev => ({ ...prev, [modelName]: 'error' }))
         }
-      } catch (error) {
+      } catch {
         setTestResults(prev => ({ ...prev, [modelName]: 'error' }))
       }
     }
@@ -243,6 +258,13 @@ const Settings = () => {
     setTestResults({})
   }
 
+  const tabs = [
+    { id: 'model' as TabType, name: '模型设置', icon: Key },
+    { id: 'language' as TabType, name: '语言设置', icon: Globe },
+    { id: 'glossary' as TabType, name: '词汇表管理', icon: Upload },
+    { id: 'license' as TabType, name: '许可证信息', icon: FileText }
+  ]
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* 页面标题 */}
@@ -254,14 +276,34 @@ const Settings = () => {
         <p className="text-gray-600">配置API密钥、默认参数和词汇表</p>
       </div>
 
-      <div className="space-y-8">
-        {/* API设置 */}
+      {/* Tab导航 */}
+      <div className="bg-white rounded-lg border border-gray-200 mb-6">
+        <div className="flex border-b border-gray-200">
+          {tabs.map((tab) => {
+            const Icon = tab.icon
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 px-6 py-4 text-sm font-medium transition-colors flex items-center justify-center space-x-2 ${
+                  activeTab === tab.id
+                    ? 'text-pink-600 border-b-2 border-pink-600 bg-pink-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                <span>{tab.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Tab内容区域 */}
+      {activeTab === 'model' && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <Key className="h-6 w-6 mr-2 text-pink-600" />
-              API设置
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-900">模型设置</h2>
             <button
               onClick={handleTestConnection}
               disabled={isTestingConnection}
@@ -326,53 +368,12 @@ const Settings = () => {
                 自定义API端点，支持第三方OpenAI兼容服务
               </p>
             </div>
-          </div>
-        </div>
 
-        {/* 默认翻译设置 */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-            <Globe className="h-6 w-6 mr-2 text-pink-600" />
-            默认翻译设置
-          </h2>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                默认源语言
-              </label>
-              <select
-                value={defaultSourceLang}
-                onChange={(e) => setDefaultSourceLang(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              >
-                {languages.map(lang => (
-                  <option key={lang.code} value={lang.code}>{lang.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                默认目标语言
-              </label>
-              <select
-                value={defaultTargetLang}
-                onChange={(e) => setDefaultTargetLang(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              >
-                {languages.filter(lang => lang.code !== 'auto').map(lang => (
-                  <option key={lang.code} value={lang.code}>{lang.name}</option>
-                ))}
-              </select>
-            </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 默认模型
               </label>
               
-              {/* 模型类型选择 */}
               <div className="mb-3">
                 <div className="flex space-x-4">
                   <label className="flex items-center">
@@ -398,7 +399,6 @@ const Settings = () => {
                 </div>
               </div>
               
-              {/* 模型选择/输入 */}
               {useCustomModel ? (
                 <input
                   type="text"
@@ -440,15 +440,91 @@ const Settings = () => {
               />
             </div>
           </div>
-        </div>
 
-        {/* 词汇表管理 */}
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={saveModelSettings}
+              disabled={savingModel}
+              className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              {savingModel ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>保存中...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  <span>保存设置</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'language' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">翻译语言设置</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                默认源语言
+              </label>
+              <select
+                value={defaultSourceLang}
+                onChange={(e) => setDefaultSourceLang(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                {languages.map(lang => (
+                  <option key={lang.code} value={lang.code}>{lang.name}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                默认目标语言
+              </label>
+              <select
+                value={defaultTargetLang}
+                onChange={(e) => setDefaultTargetLang(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                {languages.filter(lang => lang.code !== 'auto').map(lang => (
+                  <option key={lang.code} value={lang.code}>{lang.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={saveLanguageSettings}
+              disabled={savingLanguage}
+              className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+            >
+              {savingLanguage ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>保存中...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="h-5 w-5" />
+                  <span>保存设置</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'glossary' && (
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-              <Upload className="h-6 w-6 mr-2 text-pink-600" />
-              词汇表管理
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-900">词汇表管理</h2>
             
             <div className="relative">
               <input
@@ -513,28 +589,39 @@ const Settings = () => {
             </div>
           )}
         </div>
+      )}
 
-        {/* 保存按钮 */}
-        <div className="flex justify-center">
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                <span>保存中...</span>
-              </>
-            ) : (
-              <>
-                <Save className="h-5 w-5" />
-                <span>保存设置</span>
-              </>
-            )}
-          </button>
+      {activeTab === 'license' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">许可证信息</h2>
+          <div className="space-y-4 text-sm text-gray-600">
+            <div>
+              <h3 className="font-medium text-gray-900 mb-2">Easy-BabelDOC</h3>
+              <p>版本: 1.0.0</p>
+              <p>作者: lijiapeng365</p>
+              <p>许可证: GNU Affero General Public License (AGPL) v3</p>
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-2">重要声明</h4>
+              <p className="mb-2">
+                本软件基于 <a href="https://github.com/funstory-ai/BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">BabelDOC</a> 开发，使用 AGPL-3.0 许可证。
+              </p>
+              <p className="mb-2">
+                根据 AGPL-3.0 要求，如果您修改本软件并通过网络提供服务，必须向用户提供修改后的源代码。
+              </p>
+              <p>
+                完整源代码可在 <a href="https://github.com/lijiapeng365/Easy-BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub</a> 获取。
+              </p>
+            </div>
+            
+            <div className="border-t pt-4">
+              <h4 className="font-medium text-gray-900 mb-2">第三方组件</h4>
+              <p>本软件使用了多个开源组件，详细信息请查看项目的 package.json 和 requirements.txt 文件。</p>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 测试连接模态框 */}
       {showTestModal && (
@@ -580,37 +667,6 @@ const Settings = () => {
           </div>
         </div>
       )}
-
-      {/* 许可证信息 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mt-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">许可证信息</h2>
-        <div className="space-y-4 text-sm text-gray-600">
-          <div>
-            <h3 className="font-medium text-gray-900 mb-2">Easy-BabelDOC</h3>
-            <p>版本: 1.0.0</p>
-            <p>作者: lijiapeng365</p>
-            <p>许可证: GNU Affero General Public License (AGPL) v3</p>
-          </div>
-          
-          <div className="border-t pt-4">
-            <h4 className="font-medium text-gray-900 mb-2">重要声明</h4>
-            <p className="mb-2">
-              本软件基于 <a href="https://github.com/funstory-ai/BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">BabelDOC</a> 开发，使用 AGPL-3.0 许可证。
-            </p>
-            <p className="mb-2">
-              根据 AGPL-3.0 要求，如果您修改本软件并通过网络提供服务，必须向用户提供修改后的源代码。
-            </p>
-            <p>
-              完整源代码可在 <a href="https://github.com/lijiapeng365/Easy-BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">GitHub</a> 获取。
-            </p>
-          </div>
-          
-          <div className="border-t pt-4">
-            <h4 className="font-medium text-gray-900 mb-2">第三方组件</h4>
-            <p>本软件使用了多个开源组件，详细信息请查看项目的 package.json 和 requirements.txt 文件。</p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
