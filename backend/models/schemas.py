@@ -31,3 +31,19 @@ class GlossaryInfo(BaseModel):
 class CleanupRequest(BaseModel):
     delete_orphan_files: bool = False
     delete_orphan_records: bool = False
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginResponse(BaseModel):
+    user_id: str
+    username: str
+    is_guest: bool
+    token: str
+
+class UserInfo(BaseModel):
+    user_id: str
+    username: str
+    email: Optional[str] = None
+    is_guest: bool

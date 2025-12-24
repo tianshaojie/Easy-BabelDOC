@@ -29,6 +29,7 @@ class Database:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS translation_history (
                     task_id TEXT PRIMARY KEY,
+                    user_id TEXT,
                     status TEXT NOT NULL,
                     filename TEXT NOT NULL,
                     source_lang TEXT NOT NULL,
@@ -43,7 +44,8 @@ class Database:
                     config TEXT,
                     result TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
             
@@ -55,6 +57,28 @@ class Database:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_created_at 
                 ON translation_history(created_at DESC)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_id 
+                ON translation_history(user_id)
+            """)
+            
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    email TEXT,
+                    is_guest INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    last_login TIMESTAMP
+                )
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_username 
+                ON users(username)
             """)
             
             conn.commit()

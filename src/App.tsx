@@ -19,8 +19,9 @@
  * Source code: https://github.com/lijiapeng365/Easy-BabelDOC
  */
 
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
+import { useAuth } from './contexts/AuthContext'
 import Navbar from './components/Navbar'
 import Home from './pages/Home'
 import Progress from './pages/Progress'
@@ -28,8 +29,22 @@ import Result from './pages/Result'
 import History from './pages/History'
 import Settings from './pages/Settings'
 import FileManager from './pages/FileManager'
+import Login from './pages/Login'
 
 export default function App() {
+  const { loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">初始化中...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-white">
       <Navbar />
@@ -41,6 +56,7 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/history" element={<History />} />
           <Route path="/file-manager" element={<FileManager />} />
+          <Route path="/login" element={<Login />} />
         </Routes>
       </main>
       <Toaster position="top-right" richColors />

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Upload, FileText, Settings, Play, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
+import { authUtils } from '@/utils/auth'
 
 interface UploadedFile {
   file_id: string
@@ -190,7 +191,8 @@ const Home = () => {
       const response = await fetch(API_ENDPOINTS.translate, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authUtils.getAuthHeaders()
         },
         body: JSON.stringify({
           file_id: uploadedFile.file_id,

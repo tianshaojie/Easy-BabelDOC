@@ -10,6 +10,7 @@ import {
   BarChart3
 } from 'lucide-react'
 import { API_ENDPOINTS } from '@/config/api'
+import { authUtils } from '@/utils/auth'
 
 interface FileStats {
   total_files: number
@@ -47,7 +48,9 @@ const FileManager = () => {
   const loadStats = async () => {
     setLoading(true)
     try {
-      const response = await fetch(API_ENDPOINTS.fileStats)
+      const response = await fetch(API_ENDPOINTS.fileStats, {
+        headers: authUtils.getAuthHeaders()
+      })
       if (response.ok) {
         const data = await response.json()
         setStats(data)
@@ -68,7 +71,8 @@ const FileManager = () => {
       const response = await fetch(API_ENDPOINTS.fileCleanup, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authUtils.getAuthHeaders()
         },
         body: JSON.stringify({
           delete_orphan_files: false,
@@ -128,7 +132,8 @@ const FileManager = () => {
       const response = await fetch(API_ENDPOINTS.fileCleanup, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authUtils.getAuthHeaders()
         },
         body: JSON.stringify(requestBody)
       })

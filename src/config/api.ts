@@ -35,4 +35,10 @@ export const API_ENDPOINTS = {
   // 文件管理
   fileStats: `${API_BASE_URL}/api/files/stats`,
   fileCleanup: `${API_BASE_URL}/api/files/cleanup`,
+  
+  // 用户认证
+  login: `${API_BASE_URL}/api/auth/login`,
+  logout: `${API_BASE_URL}/api/auth/logout`,
+  guestCreate: `${API_BASE_URL}/api/auth/guest`,
+  currentUser: `${API_BASE_URL}/api/auth/me`,
 }

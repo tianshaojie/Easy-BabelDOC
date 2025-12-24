@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Header
 from fastapi.responses import FileResponse
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 import uuid
 import asyncio
 import json
@@ -15,10 +15,15 @@ active_translations: Dict[str, Dict] = {}
 connected_clients: Dict[str, WebSocket] = {}
 
 @router.post("/translate")
-async def start_translation(request: TranslationRequest):
+async def start_translation(request: TranslationRequest, authorization: Optional[str] = Header(None)):
     """开始翻译任务"""
     from config.settings import UPLOADS_DIR, OUTPUTS_DIR, GLOSSARIES_DIR, SENSITIVE_CONFIG_KEYS
     from utils.history import add_to_history
+    from api.auth import get_user_id_from_token
+    
+    user_id = get_user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未提供有效的认证令牌")
     
     try:
         from babeldoc.format.pdf.translation_config import TranslationConfig
@@ -71,6 +76,7 @@ async def start_translation(request: TranslationRequest):
         
         task_data = {
             "task_id": task_id,
+            "user_id": user_id,
             "status": "running",
             "filename": f"{request.file_id}.pdf",
             "source_lang": request.lang_in,
@@ -207,11 +213,16 @@ async def download_result(task_id: str, file_type: str):
     )
 
 @router.get("/translations")
-async def list_translations():
+async def list_translations(authorization: Optional[str] = Header(None)):
     """获取翻译历史"""
     from utils.history import load_history
+    from api.auth import get_user_id_from_token
     
-    history = load_history()
+    user_id = get_user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未提供有效的认证令牌")
+    
+    history = load_history(user_id=user_id)
     
     for task in history:
         task_id = task.get('task_id')

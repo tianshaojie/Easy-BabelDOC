@@ -1,21 +1,27 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Header
 from pathlib import Path
+from typing import Optional
 
 from models.schemas import CleanupRequest
 
 router = APIRouter(prefix="/api", tags=["files"])
 
 @router.post("/files/cleanup")
-async def cleanup_files(request: CleanupRequest):
+async def cleanup_files(request: CleanupRequest, authorization: Optional[str] = Header(None)):
     """清理孤儿文件和记录"""
     from utils.history import load_history, save_history
     from config.settings import OUTPUTS_DIR
+    from api.auth import get_user_id_from_token
+    
+    user_id = get_user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未提供有效的认证令牌")
     
     print(f"\n=== 开始文件清理 ===")
     print(f"delete_orphan_files: {request.delete_orphan_files}")
     print(f"delete_orphan_records: {request.delete_orphan_records}")
     
-    history = load_history()
+    history = load_history(user_id=user_id)
     print(f"历史记录数量: {len(history)}")
     
     cleanup_result = {
@@ -137,9 +143,14 @@ async def cleanup_files(request: CleanupRequest):
     return cleanup_result
 
 @router.get("/files/stats")
-async def get_file_stats():
+async def get_file_stats(authorization: Optional[str] = Header(None)):
     """获取文件存储统计信息"""
     from utils.history import load_history
+    from api.auth import get_user_id_from_token
+    
+    user_id = get_user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="未提供有效的认证令牌")
     
     stats = {
         "total_files": 0,
@@ -151,7 +162,7 @@ async def get_file_stats():
         }
     }
     
-    history = load_history()
+    history = load_history(user_id=user_id)
     
     for task in history:
         status = task.get('status', 'unknown')

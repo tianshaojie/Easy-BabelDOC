@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { History as HistoryIcon, Clock, FileText, Download, Trash2, Eye, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
+import { authUtils } from '@/utils/auth'
 
 interface HistoryItem {
   task_id: string
@@ -45,7 +46,9 @@ const History = () => {
   const loadHistory = async () => {
     setLoading(true)
     try {
-      const response = await fetch(API_ENDPOINTS.translations)
+      const response = await fetch(API_ENDPOINTS.translations, {
+        headers: authUtils.getAuthHeaders()
+      })
       if (response.ok) {
         const data = await response.json()
         setHistory(data)
@@ -181,7 +184,8 @@ const History = () => {
       const response = await fetch(API_ENDPOINTS.translations, {
         method: 'DELETE',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...authUtils.getAuthHeaders()
         },
         body: JSON.stringify(selectedItems)
       })
@@ -213,7 +217,9 @@ const History = () => {
 
   const downloadResult = async (taskId: string, type: 'mono' | 'dual') => {
     try {
-      const response = await fetch(API_ENDPOINTS.translationDownload(taskId, type))
+      const response = await fetch(API_ENDPOINTS.translationDownload(taskId, type), {
+        headers: authUtils.getAuthHeaders()
+      })
       
       if (response.ok) {
         const blob = await response.blob()

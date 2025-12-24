@@ -43,11 +43,15 @@ def remove_sensitive_config(task: Dict[str, Any]) -> Dict[str, Any]:
                 config.pop(key, None)
     return sanitized
 
-def load_history() -> List[Dict]:
-    """从数据库加载翻译历史"""
+def load_history(user_id: Optional[str] = None) -> List[Dict]:
+    """从数据库加载翻译历史
+    
+    Args:
+        user_id: 用户ID（可选，用于过滤）
+    """
     try:
         history_model = get_db()
-        history = history_model.get_all()
+        history = history_model.get_all(user_id=user_id)
         return [remove_sensitive_config(item) for item in history]
     except Exception as e:
         print(f"加载历史记录失败: {e}")
