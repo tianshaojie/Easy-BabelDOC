@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Upload, FileText, Settings, Play, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
 import { authUtils } from '@/utils/auth'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface UploadedFile {
   file_id: string
@@ -25,14 +26,25 @@ interface TranslationConfig {
   glossary_ids: string[]
 }
 
+interface ModelItem {
+  id: number
+  user_id: string
+  base_url: string
+  api_key: string
+  model: string
+  is_default: boolean
+  created_at: string
+}
+
 const Home = () => {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [isTranslating, setIsTranslating] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [availableModels, setAvailableModels] = useState<{value: string, name: string}[]>([])
+  const [availableModels, setAvailableModels] = useState<{value: string, name: string, baseUrl: string, apiKey: string}[]>([])
   
   const [config, setConfig] = useState<TranslationConfig>({
     lang_in: 'en',
@@ -50,66 +62,71 @@ const Home = () => {
   const [enableMonoOutput, setEnableMonoOutput] = useState(true)
   const [enableDualOutput, setEnableDualOutput] = useState(true)
 
+  // 加载用户的模型列表
+  const loadUserModels = useCallback(async () => {
+    try {
+      const token = user?.token
+      if (!token) return
+      
+      const response = await fetch(API_ENDPOINTS.models, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data: ModelItem[] = await response.json()
+        
+        // 转换为下拉框选项格式
+        const modelOptions = data.map(m => ({
+          value: m.model,
+          name: m.model,
+          baseUrl: m.base_url,
+          apiKey: m.api_key
+        }))
+        setAvailableModels(modelOptions)
+        
+        // 查找默认模型并设置
+        const defaultModel = data.find(m => m.is_default)
+        if (defaultModel) {
+          setConfig(prev => ({
+            ...prev,
+            model: defaultModel.model,
+            base_url: defaultModel.base_url
+          }))
+        } else if (data.length > 0) {
+          // 如果没有默认模型，使用第一个
+          setConfig(prev => ({
+            ...prev,
+            model: data[0].model,
+            base_url: data[0].base_url
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load user models:', error)
+    }
+  }, [user?.token])
+
   // 加载保存的设置
   useEffect(() => {
     const loadSettings = () => {
-      const savedBaseUrl = localStorage.getItem('babeldoc_base_url') || ''
       const savedDefaultSourceLang = localStorage.getItem('babeldoc_default_source_lang') || 'en'
       const savedDefaultTargetLang = localStorage.getItem('babeldoc_default_target_lang') || 'zh'
-      const savedDefaultModel = localStorage.getItem('babeldoc_default_model') || 'gpt-4o-mini'
       const savedDefaultQps = parseInt(localStorage.getItem('babeldoc_default_qps') || '1')
 
       setConfig(prev => ({
         ...prev,
-        base_url: savedBaseUrl,
         lang_in: savedDefaultSourceLang,
         lang_out: savedDefaultTargetLang,
-        model: savedDefaultModel,
         qps: savedDefaultQps
       }))
-      
-      // 更新可用模型列表
-      setAvailableModels(getAvailableModels())
     }
 
     loadSettings()
+    loadUserModels()
+  }, [loadUserModels])
 
-    // 监听localStorage变化，当设置页面更新自定义模型时实时更新
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'babeldoc_custom_model' || e.key === 'babeldoc_use_custom_model' || e.key === 'babeldoc_default_model') {
-        loadSettings()
-      }
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-    }
-  }, [])
-
-  // 获取可用的模型列表（包括自定义模型）
-  const getAvailableModels = () => {
-    const defaultModels = [
-      { value: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-      { value: 'gpt-4o', name: 'GPT-4o' },
-      { value: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-      { value: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
-    ]
-
-    // 检查是否有自定义模型
-    const savedCustomModel = localStorage.getItem('babeldoc_custom_model') || ''
-    const savedUseCustomModel = localStorage.getItem('babeldoc_use_custom_model') === 'true'
-    
-    if (savedUseCustomModel && savedCustomModel.trim()) {
-      return [
-        ...defaultModels,
-        { value: savedCustomModel.trim(), name: `${savedCustomModel.trim()} (自定义)` }
-      ]
-    }
-    
-    return defaultModels
-  }
 
   const handleFileSelect = async (file: File) => {
     if (!file.type.includes('pdf')) {
@@ -174,12 +191,15 @@ const Home = () => {
       return
     }
 
-    // 从localStorage读取API密钥
-    const apiKey = localStorage.getItem('babeldoc_api_key') || ''
-    if (!apiKey) {
-      toast.error('请先在设置页面配置OpenAI API密钥')
+    // 从选中的模型获取API密钥和base_url
+    const selectedModel = availableModels.find(m => m.value === config.model)
+    if (!selectedModel) {
+      toast.error('请先在设置页面添加模型配置')
       return
     }
+    
+    const apiKey = selectedModel.apiKey
+    const baseUrl = selectedModel.baseUrl
 
     // 检查用户ID
     const userId = authUtils.getUserId()
@@ -196,7 +216,7 @@ const Home = () => {
       const processedConfig = {
         ...config,
         api_key: apiKey,
-        base_url: config.base_url.trim() ? config.base_url.trim().replace(/\/$/, '') : ''
+        base_url: baseUrl.trim() ? baseUrl.trim().replace(/\/$/, '') : ''
       }
 
       const response = await fetch(API_ENDPOINTS.translate, {
@@ -376,17 +396,32 @@ const Home = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   翻译模型
                 </label>
-                <select
-                  value={config.model}
-                  onChange={(e) => setConfig({ ...config, model: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                >
-                  {availableModels.map((model) => (
-                    <option key={model.value} value={model.value}>
-                      {model.name}
-                    </option>
-                  ))}
-                </select>
+                {availableModels.length > 0 ? (
+                  <select
+                    value={config.model}
+                    onChange={(e) => {
+                      const selectedModel = availableModels.find(m => m.value === e.target.value)
+                      if (selectedModel) {
+                        setConfig({ 
+                          ...config, 
+                          model: e.target.value,
+                          base_url: selectedModel.baseUrl
+                        })
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  >
+                    {availableModels.map((model) => (
+                      <option key={model.value} value={model.value}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500 text-sm">
+                    请先在设置页面添加模型配置
+                  </div>
+                )}
               </div>
 
 

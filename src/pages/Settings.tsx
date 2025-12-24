@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
-import { Settings as SettingsIcon, Key, Globe, Upload, Trash2, Save, Eye, EyeOff, TestTube, X, FileText } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Settings as SettingsIcon, Key, Globe, Upload, Trash2, Save, Eye, EyeOff, FileText, Plus, Star } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface GlossaryItem {
   id: string
@@ -10,26 +11,35 @@ interface GlossaryItem {
   size: number
 }
 
+interface ModelItem {
+  id: number
+  user_id: string
+  base_url: string
+  api_key: string
+  model: string
+  is_default: boolean
+  created_at: string
+}
+
 type TabType = 'model' | 'language' | 'glossary' | 'license'
 
 const Settings = () => {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('model')
-  const [apiKey, setApiKey] = useState('')
-  const [baseUrl, setBaseUrl] = useState('')
-  const [showApiKey, setShowApiKey] = useState(false)
   const [defaultSourceLang, setDefaultSourceLang] = useState('auto')
   const [defaultTargetLang, setDefaultTargetLang] = useState('zh')
-  const [defaultModel, setDefaultModel] = useState('gpt-4o')
-  const [customModel, setCustomModel] = useState('')
-  const [useCustomModel, setUseCustomModel] = useState(false)
   const [defaultQps, setDefaultQps] = useState(1)
   const [glossaries, setGlossaries] = useState<GlossaryItem[]>([])
   const [uploading, setUploading] = useState(false)
-  const [savingModel, setSavingModel] = useState(false)
   const [savingLanguage, setSavingLanguage] = useState(false)
-  const [isTestingConnection, setIsTestingConnection] = useState(false)
-  const [showTestModal, setShowTestModal] = useState(false)
-  const [testResults, setTestResults] = useState<{[key: string]: 'success' | 'error' | 'testing'}>({})
+  
+  const [models, setModels] = useState<ModelItem[]>([])
+  const [newBaseUrl, setNewBaseUrl] = useState('')
+  const [newApiKey, setNewApiKey] = useState('')
+  const [newModel, setNewModel] = useState('')
+  const [showNewApiKey, setShowNewApiKey] = useState(false)
+  const [addingModel, setAddingModel] = useState(false)
+  const [savingQps, setSavingQps] = useState(false)
 
   const languages = [
     { code: 'auto', name: '自动检测' },
@@ -49,36 +59,13 @@ const Settings = () => {
     { code: 'vi', name: '越南文' }
   ]
 
-  const models = [
-    { value: 'gpt-4o', name: 'GPT-4o' },
-    { value: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { value: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-    { value: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo' }
-  ]
-
-  useEffect(() => {
-    loadSettings()
-    loadGlossaries()
-  }, [])
-
   const loadSettings = () => {
-    // 从localStorage加载设置
-    const savedApiKey = localStorage.getItem('babeldoc_api_key') || ''
-    const savedBaseUrl = localStorage.getItem('babeldoc_base_url') || ''
     const savedSourceLang = localStorage.getItem('babeldoc_default_source_lang') || 'auto'
     const savedTargetLang = localStorage.getItem('babeldoc_default_target_lang') || 'zh'
-    const savedModel = localStorage.getItem('babeldoc_default_model') || 'gpt-4o'
-    const savedCustomModel = localStorage.getItem('babeldoc_custom_model') || ''
-    const savedUseCustomModel = localStorage.getItem('babeldoc_use_custom_model') === 'true'
     const savedQps = parseInt(localStorage.getItem('babeldoc_default_qps') || '1')
 
-    setApiKey(savedApiKey)
-    setBaseUrl(savedBaseUrl)
     setDefaultSourceLang(savedSourceLang)
     setDefaultTargetLang(savedTargetLang)
-    setDefaultModel(savedModel)
-    setCustomModel(savedCustomModel)
-    setUseCustomModel(savedUseCustomModel)
     setDefaultQps(savedQps)
   }
 
@@ -94,28 +81,139 @@ const Settings = () => {
     }
   }
 
-  const saveModelSettings = async () => {
-    setSavingModel(true)
+  const loadModels = useCallback(async () => {
+    try {
+      const token = user?.token
+      if (!token) return
+      
+      const response = await fetch(API_ENDPOINTS.models, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setModels(data)
+      }
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    }
+  }, [user?.token])
+
+  useEffect(() => {
+    loadSettings()
+    loadGlossaries()
+    loadModels()
+  }, [loadModels])
+  
+  const addModel = async () => {
+    if (!newBaseUrl.trim() || !newApiKey.trim() || !newModel.trim()) {
+      toast.error('请填写完整的模型信息')
+      return
+    }
+    
+    setAddingModel(true)
     
     try {
-      if (useCustomModel && !customModel.trim()) {
-        toast.error('请输入自定义模型名称')
-        setSavingModel(false)
+      const token = user?.token
+      if (!token) {
+        toast.error('未登录')
         return
       }
       
-      localStorage.setItem('babeldoc_api_key', apiKey)
-      localStorage.setItem('babeldoc_base_url', baseUrl)
-      localStorage.setItem('babeldoc_default_model', useCustomModel ? customModel.trim() : defaultModel)
-      localStorage.setItem('babeldoc_custom_model', customModel.trim())
-      localStorage.setItem('babeldoc_use_custom_model', useCustomModel.toString())
-      localStorage.setItem('babeldoc_default_qps', defaultQps.toString())
+      const response = await fetch(API_ENDPOINTS.models, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          base_url: newBaseUrl.trim(),
+          api_key: newApiKey.trim(),
+          model: newModel.trim(),
+          is_default: models.length === 0
+        })
+      })
       
-      toast.success('模型设置已保存')
-    } catch {
-      toast.error('保存模型设置失败')
+      if (response.ok) {
+        toast.success('模型已添加')
+        setNewBaseUrl('')
+        setNewApiKey('')
+        setNewModel('')
+        loadModels()
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || '添加失败')
+      }
+    } catch (error) {
+      console.error('Add model failed:', error)
+      toast.error('添加过程中发生错误')
     } finally {
-      setSavingModel(false)
+      setAddingModel(false)
+    }
+  }
+  
+  const deleteModel = async (modelId: number) => {
+    if (!window.confirm('确定要删除这个模型配置吗？')) return
+    
+    try {
+      const token = user?.token
+      if (!token) return
+      
+      const response = await fetch(API_ENDPOINTS.modelDelete(modelId), {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        toast.success('模型已删除')
+        loadModels()
+      } else {
+        toast.error('删除失败')
+      }
+    } catch (error) {
+      console.error('Delete model failed:', error)
+      toast.error('删除过程中发生错误')
+    }
+  }
+  
+  const setDefaultModel = async (modelId: number) => {
+    try {
+      const token = user?.token
+      if (!token) return
+      
+      const response = await fetch(API_ENDPOINTS.modelSetDefault(modelId), {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        toast.success('默认模型已设置')
+        loadModels()
+      } else {
+        toast.error('设置失败')
+      }
+    } catch (error) {
+      console.error('Set default model failed:', error)
+      toast.error('设置过程中发生错误')
+    }
+  }
+  
+  const saveQpsSettings = async () => {
+    setSavingQps(true)
+    
+    try {
+      localStorage.setItem('babeldoc_default_qps', defaultQps.toString())
+      toast.success('QPS设置已保存')
+    } catch {
+      toast.error('保存QPS设置失败')
+    } finally {
+      setSavingQps(false)
     }
   }
 
@@ -156,7 +254,7 @@ const Settings = () => {
 
       if (response.ok) {
         toast.success('词汇表上传成功')
-        loadGlossaries() // 重新加载词汇表列表
+        loadGlossaries()
       } else {
         const error = await response.json()
         toast.error(error.detail || '上传失败')
@@ -166,7 +264,6 @@ const Settings = () => {
       toast.error('上传过程中发生错误')
     } finally {
       setUploading(false)
-      // 清空文件输入
       event.target.value = ''
     }
   }
@@ -181,7 +278,7 @@ const Settings = () => {
 
       if (response.ok) {
         toast.success('词汇表已删除')
-        loadGlossaries() // 重新加载词汇表列表
+        loadGlossaries()
       } else {
         toast.error('删除失败')
       }
@@ -199,63 +296,15 @@ const Settings = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const handleTestConnection = async () => {
-    if (!apiKey.trim()) {
-      toast.error('请先输入API密钥')
-      return
-    }
-
-    setIsTestingConnection(true)
-    setShowTestModal(true)
-    setTestResults({})
-
-    // 获取所有要测试的模型
-    const modelsToTest = [
-      'gpt-4o',
-      'gpt-4o-mini', 
-      'gpt-4-turbo',
-      'gpt-3.5-turbo'
-    ]
-    
-    if (customModel.trim()) {
-      modelsToTest.push(customModel.trim())
-    }
-
-    // 测试每个模型
-    for (const modelName of modelsToTest) {
-      setTestResults(prev => ({ ...prev, [modelName]: 'testing' }))
-      
-      try {
-        const testBaseUrl = (baseUrl.trim() || 'https://api.openai.com/v1').replace(/\/$/, '')
-        const response = await fetch(`${testBaseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: modelName,
-            messages: [{ role: 'user', content: 'test' }],
-            max_tokens: 1
-          })
-        })
-
-        if (response.ok) {
-          setTestResults(prev => ({ ...prev, [modelName]: 'success' }))
-        } else {
-          setTestResults(prev => ({ ...prev, [modelName]: 'error' }))
-        }
-      } catch {
-        setTestResults(prev => ({ ...prev, [modelName]: 'error' }))
+  const groupModelsByBaseUrl = () => {
+    const grouped: { [key: string]: ModelItem[] } = {}
+    models.forEach(model => {
+      if (!grouped[model.base_url]) {
+        grouped[model.base_url] = []
       }
-    }
-
-    setIsTestingConnection(false)
-  }
-
-  const closeTestModal = () => {
-    setShowTestModal(false)
-    setTestResults({})
+      grouped[model.base_url].push(model)
+    })
+    return grouped
   }
 
   const tabs = [
@@ -267,7 +316,6 @@ const Settings = () => {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* 页面标题 */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center justify-center">
           <SettingsIcon className="h-8 w-8 mr-2 text-pink-600" />
@@ -276,7 +324,6 @@ const Settings = () => {
         <p className="text-gray-600">配置API密钥、默认参数和词汇表</p>
       </div>
 
-      {/* Tab导航 */}
       <div className="bg-white rounded-lg border border-gray-200 mb-6">
         <div className="flex border-b border-gray-200">
           {tabs.map((tab) => {
@@ -299,132 +346,150 @@ const Settings = () => {
         </div>
       </div>
 
-      {/* Tab内容区域 */}
       {activeTab === 'model' && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">模型设置</h2>
-            <button
-              onClick={handleTestConnection}
-              disabled={isTestingConnection}
-              className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            >
-              {isTestingConnection ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>测试中...</span>
-                </>
-              ) : (
-                <>
-                  <TestTube className="h-4 w-4" />
-                  <span>测试连接</span>
-                </>
-              )}
-            </button>
-          </div>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                OpenAI API密钥
-              </label>
-              <div className="relative">
-                <input
-                  type={showApiKey ? 'text' : 'password'}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="请输入您的OpenAI API密钥"
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                >
-                  {showApiKey ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                API密钥将安全地存储在本地浏览器中
-              </p>
-            </div>
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">模型列表</h2>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                OpenAI Base URL
-              </label>
-              <input
-                type="text"
-                value={baseUrl}
-                onChange={(e) => setBaseUrl(e.target.value)}
-                placeholder="https://api.openai.com/v1（留空使用默认）"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                自定义API端点，支持第三方OpenAI兼容服务
-              </p>
-            </div>
+            {models.length > 0 ? (
+              <div className="space-y-4">
+                {Object.entries(groupModelsByBaseUrl()).map(([baseUrl, modelList]) => (
+                  <div key={baseUrl} className="border border-gray-200 rounded-lg p-4">
+                    <h3 className="font-medium text-gray-700 mb-3 flex items-center">
+                      <Globe className="h-4 w-4 mr-2" />
+                      {baseUrl}
+                    </h3>
+                    <div className="space-y-2">
+                      {modelList.map(model => (
+                        <div key={model.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-medium text-gray-900">{model.model}</span>
+                              {model.is_default && (
+                                <span className="px-2 py-1 text-xs bg-pink-100 text-pink-600 rounded-full flex items-center">
+                                  <Star className="h-3 w-3 mr-1 fill-current" />
+                                  默认
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              API Key: {model.api_key.substring(0, 10)}...
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-2">
+                            {!model.is_default && (
+                              <button
+                                onClick={() => setDefaultModel(model.id)}
+                                className="text-gray-600 hover:text-pink-600 p-2 rounded-lg hover:bg-pink-50 transition-colors"
+                                title="设为默认"
+                              >
+                                <Star className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => deleteModel(model.id)}
+                              className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                              title="删除"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Key className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                <p>暂无模型配置</p>
+                <p className="text-sm">请在下方添加模型</p>
+              </div>
+            )}
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                默认模型
-              </label>
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">添加模型</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Base URL
+                </label>
+                <input
+                  type="text"
+                  value={newBaseUrl}
+                  onChange={(e) => setNewBaseUrl(e.target.value)}
+                  placeholder="https://api.openai.com/v1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                />
+              </div>
               
-              <div className="mb-3">
-                <div className="flex space-x-4">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="modelType"
-                      checked={!useCustomModel}
-                      onChange={() => setUseCustomModel(false)}
-                      className="mr-2 text-pink-600 focus:ring-pink-500"
-                    />
-                    <span className="text-sm text-gray-700">预设模型</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="modelType"
-                      checked={useCustomModel}
-                      onChange={() => setUseCustomModel(true)}
-                      className="mr-2 text-pink-600 focus:ring-pink-500"
-                    />
-                    <span className="text-sm text-gray-700">自定义模型</span>
-                  </label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  API密钥
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewApiKey ? 'text' : 'password'}
+                    value={newApiKey}
+                    onChange={(e) => setNewApiKey(e.target.value)}
+                    placeholder="请输入API密钥"
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewApiKey(!showNewApiKey)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewApiKey ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
                 </div>
               </div>
               
-              {useCustomModel ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  模型名称
+                </label>
                 <input
                   type="text"
-                  value={customModel}
-                  onChange={(e) => setCustomModel(e.target.value)}
-                  placeholder="请输入自定义模型名称，如：gpt-4-1106-preview"
+                  value={newModel}
+                  onChange={(e) => setNewModel(e.target.value)}
+                  placeholder="gpt-4o"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
-              ) : (
-                <select
-                  value={defaultModel}
-                  onChange={(e) => setDefaultModel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                >
-                  {models.map(model => (
-                    <option key={model.value} value={model.value}>{model.name}</option>
-                  ))}
-                </select>
-              )}
-              
-              <p className="text-xs text-gray-500 mt-1">
-                {useCustomModel 
-                  ? "支持任何兼容OpenAI API的模型名称" 
-                  : "选择预设的OpenAI模型"}
-              </p>
+              </div>
             </div>
+
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={addModel}
+                disabled={addingModel}
+                className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {addingModel ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>添加中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5" />
+                    <span>添加模型</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">默认QPS</h2>
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -439,26 +504,26 @@ const Settings = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
               />
             </div>
-          </div>
 
-          <div className="flex justify-center mt-6">
-            <button
-              onClick={saveModelSettings}
-              disabled={savingModel}
-              className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-            >
-              {savingModel ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  <span>保存中...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="h-5 w-5" />
-                  <span>保存设置</span>
-                </>
-              )}
-            </button>
+            <div className="flex justify-center mt-6">
+              <button
+                onClick={saveQpsSettings}
+                disabled={savingQps}
+                className="bg-pink-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-pink-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+              >
+                {savingQps ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    <span>保存中...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-5 w-5" />
+                    <span>保存设置</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -618,51 +683,6 @@ const Settings = () => {
             <div className="border-t pt-4">
               <h4 className="font-medium text-gray-900 mb-2">第三方组件</h4>
               <p>本软件使用了多个开源组件，详细信息请查看项目的 package.json 和 requirements.txt 文件。</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 测试连接模态框 */}
-      {showTestModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">模型连接测试</h3>
-              <button
-                onClick={closeTestModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-3">
-              {Object.entries(testResults).map(([modelName, status]) => (
-                <div key={modelName} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="font-medium text-gray-700">{modelName}</span>
-                  <div className="flex items-center">
-                    {status === 'testing' && (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-pink-600"></div>
-                    )}
-                    {status === 'success' && (
-                      <div className="text-green-600 font-semibold">✓ 连接成功</div>
-                    )}
-                    {status === 'error' && (
-                      <div className="text-red-600 font-semibold">✗ 连接失败</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={closeTestModal}
-                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-              >
-                关闭
-              </button>
             </div>
           </div>
         </div>

@@ -47,3 +47,24 @@ class UserInfo(BaseModel):
     username: str
     email: Optional[str] = None
     is_guest: bool
+
+class ModelCreate(BaseModel):
+    base_url: str
+    api_key: str
+    model: str
+    is_default: bool = False
+
+class ModelUpdate(BaseModel):
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    model: Optional[str] = None
+    is_default: Optional[bool] = None
+
+class ModelInfo(BaseModel):
+    id: int
+    user_id: str
+    base_url: str
+    api_key: str
+    model: str
+    is_default: bool
+    created_at: str

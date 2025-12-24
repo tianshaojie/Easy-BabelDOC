@@ -41,4 +41,10 @@ export const API_ENDPOINTS = {
   logout: `${API_BASE_URL}/api/auth/logout`,
   guestCreate: `${API_BASE_URL}/api/auth/guest`,
   currentUser: `${API_BASE_URL}/api/auth/me`,
+  
+  // 模型管理
+  models: `${API_BASE_URL}/api/models`,
+  modelUpdate: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}`,
+  modelDelete: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}`,
+  modelSetDefault: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}/set-default`,
 }

@@ -81,6 +81,29 @@ class Database:
                 ON users(username)
             """)
             
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS models (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    base_url TEXT NOT NULL,
+                    api_key TEXT NOT NULL,
+                    model TEXT NOT NULL,
+                    is_default INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_models_user_id 
+                ON models(user_id)
+            """)
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_models_is_default 
+                ON models(user_id, is_default)
+            """)
+            
             conn.commit()
             logger.info(f"Database initialized at {self.db_path}")
     
