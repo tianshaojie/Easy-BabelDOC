@@ -26,9 +26,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initAuth = async () => {
       try {
         const existingUser = authUtils.getUserInfo()
-        const existingToken = authUtils.getToken()
         
-        if (existingUser && existingToken) {
+        if (existingUser) {
           console.log('Using existing user:', existingUser.user_id)
           setUser(existingUser)
         } else {
@@ -61,11 +60,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   const logout = async () => {
+    // 如果当前是游客，不做任何操作，保留游客信息
+    if (user?.is_guest) {
+      return
+    }
+    
+    // 如果是正式用户登出，调用登出API
     await authLogout()
-    setUser(null)
-    const guestUser = await initGuestUser()
-    if (guestUser) {
-      setUser(guestUser)
+    
+    // 登出后，恢复之前保存的游客用户信息
+    const savedGuestUser = authUtils.getGuestUser()
+    if (savedGuestUser) {
+      // 恢复游客用户，保持游客ID不变
+      authUtils.setUserInfo(savedGuestUser)
+      setUser(savedGuestUser)
+      console.log('Restored guest user:', savedGuestUser.user_id)
+    } else {
+      // 如果没有保存的游客信息，创建新的游客
+      setUser(null)
+      const guestUser = await initGuestUser()
+      if (guestUser) {
+        setUser(guestUser)
+      }
     }
   }
 

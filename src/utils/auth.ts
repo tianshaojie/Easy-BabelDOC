@@ -5,21 +5,13 @@ interface UserInfo {
   token: string
 }
 
-const TOKEN_KEY = 'babeldoc_token'
 const USER_INFO_KEY = 'babeldoc_user'
-const GUEST_ID_KEY = 'babeldoc_guest_id'
+const GUEST_USER_KEY = 'babeldoc_guest_user'
 
 export const authUtils = {
-  getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY)
-  },
-
-  setToken(token: string): void {
-    localStorage.setItem(TOKEN_KEY, token)
-  },
-
-  removeToken(): void {
-    localStorage.removeItem(TOKEN_KEY)
+  getUserId(): string | null {
+    const user = this.getUserInfo()
+    return user ? user.user_id : null
   },
 
   getUserInfo(): UserInfo | null {
@@ -33,6 +25,11 @@ export const authUtils = {
   },
 
   setUserInfo(user: UserInfo): void {
+    // 如果当前有游客用户，且新用户不是游客，则保存游客信息
+    const currentUser = this.getUserInfo()
+    if (currentUser?.is_guest && !user.is_guest) {
+      this.saveGuestUser(currentUser)
+    }
     localStorage.setItem(USER_INFO_KEY, JSON.stringify(user))
   },
 
@@ -40,29 +37,34 @@ export const authUtils = {
     localStorage.removeItem(USER_INFO_KEY)
   },
 
+  saveGuestUser(guestUser: UserInfo): void {
+    localStorage.setItem(GUEST_USER_KEY, JSON.stringify(guestUser))
+  },
+
+  getGuestUser(): UserInfo | null {
+    const guestStr = localStorage.getItem(GUEST_USER_KEY)
+    if (!guestStr) return null
+    try {
+      return JSON.parse(guestStr)
+    } catch {
+      return null
+    }
+  },
+
   isAuthenticated(): boolean {
-    return !!this.getToken()
+    return !!this.getUserId()
   },
 
   logout(): void {
-    this.removeToken()
     this.removeUserInfo()
   },
 
   getAuthHeaders(): HeadersInit {
-    const token = this.getToken()
-    if (!token) return {}
+    const userId = this.getUserId()
+    if (!userId) return {}
     return {
-      'Authorization': `Bearer ${token}`
+      'Authorization': `Bearer ${userId}`
     }
-  },
-
-  getGuestId(): string | null {
-    return localStorage.getItem(GUEST_ID_KEY)
-  },
-
-  setGuestId(guestId: string): void {
-    localStorage.setItem(GUEST_ID_KEY, guestId)
   }
 }
 
@@ -88,9 +90,7 @@ export async function initGuestUser(): Promise<UserInfo | null> {
 
     if (response.ok) {
       const userInfo: UserInfo = await response.json()
-      authUtils.setToken(userInfo.token)
       authUtils.setUserInfo(userInfo)
-      authUtils.setGuestId(userInfo.user_id)
       console.log('Guest user created:', userInfo.user_id)
       return userInfo
     } else {
@@ -118,7 +118,6 @@ export async function login(username: string, password: string): Promise<UserInf
 
     if (response.ok) {
       const userInfo: UserInfo = await response.json()
-      authUtils.setToken(userInfo.token)
       authUtils.setUserInfo(userInfo)
       return userInfo
     }

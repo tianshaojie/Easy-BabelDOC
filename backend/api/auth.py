@@ -1,17 +1,10 @@
 from fastapi import APIRouter, HTTPException, Header
 from typing import Optional
 import uuid
-import secrets
 
 from models.schemas import LoginRequest, LoginResponse, UserInfo
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-_user_tokens = {}
-
-def generate_token() -> str:
-    """生成访问令牌"""
-    return secrets.token_urlsafe(32)
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
@@ -31,14 +24,11 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     
-    token = generate_token()
-    _user_tokens[token] = user_id
-    
     return LoginResponse(
         user_id=user['user_id'],
         username=user['username'],
         is_guest=bool(user['is_guest']),
-        token=token
+        token=user['user_id']
     )
 
 @router.post("/guest", response_model=LoginResponse)
@@ -66,16 +56,13 @@ async def create_guest():
             logger.error("Failed to create guest user in database")
             raise HTTPException(status_code=500, detail="创建游客账号失败")
         
-        token = generate_token()
-        _user_tokens[token] = user_id
-        
         logger.info(f"Guest user created successfully: {user_id}")
         
         return LoginResponse(
             user_id=user_id,
             username=username,
             is_guest=True,
-            token=token
+            token=user_id
         )
     except Exception as e:
         logger.error(f"Error creating guest user: {e}")
@@ -88,13 +75,12 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     from config.settings import DB_FILE
     
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未提供认证令牌")
+        raise HTTPException(status_code=401, detail="未提供用户ID")
     
-    token = authorization.replace("Bearer ", "")
-    user_id = _user_tokens.get(token)
+    user_id = authorization.replace("Bearer ", "")
     
     if not user_id:
-        raise HTTPException(status_code=401, detail="无效的认证令牌")
+        raise HTTPException(status_code=401, detail="无效的用户ID")
     
     db = Database(DB_FILE)
     user_model = User(db)
@@ -114,20 +100,16 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
 async def logout(authorization: Optional[str] = Header(None)):
     """用户登出"""
     if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未提供认证令牌")
-    
-    token = authorization.replace("Bearer ", "")
-    if token in _user_tokens:
-        del _user_tokens[token]
+        raise HTTPException(status_code=401, detail="未提供用户ID")
     
     return {"message": "登出成功"}
 
-def get_user_id_from_token(token: Optional[str]) -> Optional[str]:
-    """从token获取用户ID"""
-    if not token:
+def get_user_id_from_token(user_id_header: Optional[str]) -> Optional[str]:
+    """从请求头获取用户ID"""
+    if not user_id_header:
         return None
     
-    if token.startswith("Bearer "):
-        token = token.replace("Bearer ", "")
+    if user_id_header.startswith("Bearer "):
+        user_id_header = user_id_header.replace("Bearer ", "")
     
-    return _user_tokens.get(token)
+    return user_id_header
