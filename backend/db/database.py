@@ -19,9 +19,10 @@ class Database:
         """
         self.db_path = db_path
         self._ensure_db_exists()
+        self._run_migrations()
     
     def _ensure_db_exists(self):
-        """确保数据库文件和表结构存在"""
+        """确保数据库文件和基础表结构存在"""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         with self.get_connection() as conn:
@@ -29,7 +30,6 @@ class Database:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS translation_history (
                     task_id TEXT PRIMARY KEY,
-                    user_id TEXT,
                     status TEXT NOT NULL,
                     filename TEXT NOT NULL,
                     source_lang TEXT NOT NULL,
@@ -44,8 +44,7 @@ class Database:
                     config TEXT,
                     result TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             
@@ -59,53 +58,19 @@ class Database:
                 ON translation_history(created_at DESC)
             """)
             
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_user_id 
-                ON translation_history(user_id)
-            """)
-            
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    user_id TEXT PRIMARY KEY,
-                    username TEXT UNIQUE NOT NULL,
-                    password_hash TEXT NOT NULL,
-                    email TEXT,
-                    is_guest INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_login TIMESTAMP
-                )
-            """)
-            
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_username 
-                ON users(username)
-            """)
-            
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS models (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
-                    base_url TEXT NOT NULL,
-                    api_key TEXT NOT NULL,
-                    model TEXT NOT NULL,
-                    is_default INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(user_id)
-                )
-            """)
-            
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_models_user_id 
-                ON models(user_id)
-            """)
-            
-            cursor.execute("""
-                CREATE INDEX IF NOT EXISTS idx_models_is_default 
-                ON models(user_id, is_default)
-            """)
-            
             conn.commit()
             logger.info(f"Database initialized at {self.db_path}")
+    
+    def _run_migrations(self):
+        """运行数据库迁移"""
+        from .migrate import run_migrations
+        
+        try:
+            if not run_migrations(self.db_path):
+                logger.warning("数据库迁移未完全成功,但将继续运行")
+        except Exception as e:
+            logger.error(f"运行数据库迁移时出错: {e}", exc_info=True)
+            raise
     
     @contextmanager
     def get_connection(self):

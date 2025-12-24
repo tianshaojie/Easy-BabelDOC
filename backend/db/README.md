@@ -100,7 +100,54 @@ success = delete_task(task_id)
 history = load_history()
 ```
 
-## 数据迁移
+## 数据库结构迁移（重要）
+
+### 自动迁移系统
+
+本项目使用**版本化的数据库迁移系统**，确保在不同电脑或多人开发时数据库结构保持一致。
+
+**特性**:
+- ✅ **自动执行**: 应用启动时自动检测并执行所需迁移
+- ✅ **版本管理**: 使用 `schema_version` 表跟踪数据库版本
+- ✅ **增量更新**: 只执行尚未应用的迁移，避免重复
+- ✅ **事务安全**: 迁移失败自动回滚
+
+### 使用方法
+
+**正常启动（推荐）**:
+```bash
+python main.py  # 迁移会自动执行
+```
+
+**手动执行迁移**:
+```bash
+python -m db.migrate
+```
+
+### 换电脑/多人开发场景
+
+当你在新电脑上或拉取了包含数据库结构变更的代码后：
+
+1. **无需手动操作** - 直接启动应用即可
+2. 迁移系统会自动检测数据库版本
+3. 自动执行所有缺失的迁移
+4. 数据库更新到最新版本
+
+**示例输出**:
+```
+INFO:easy_babeldoc.migrate:检查数据库迁移: ~/.easy-babeldoc/babeldoc.db
+INFO:easy_babeldoc.migrate:当前数据库版本: 0
+INFO:easy_babeldoc.migrate:发现 2 个待执行的迁移
+INFO:easy_babeldoc.migrate:应用迁移 v1: 添加用户支持
+INFO:easy_babeldoc.migrate:✓ 迁移 v1 完成
+INFO:easy_babeldoc.migrate:应用迁移 v2: 添加模型配置表
+INFO:easy_babeldoc.migrate:✓ 迁移 v2 完成
+INFO:easy_babeldoc.migrate:所有数据库迁移成功完成!
+```
+
+详细文档请查看: [`MIGRATION_GUIDE.md`](./MIGRATION_GUIDE.md)
+
+## JSON 数据迁移
 
 如果你有旧的 `translation_history.json` 文件，运行迁移脚本：
 
