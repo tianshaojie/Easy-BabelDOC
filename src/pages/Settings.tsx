@@ -34,9 +34,13 @@ const Settings = () => {
   const [savingLanguage, setSavingLanguage] = useState(false)
   
   const [models, setModels] = useState<ModelItem[]>([])
-  const [newBaseUrl, setNewBaseUrl] = useState('')
+  const [newBaseUrl, setNewBaseUrl] = useState(() => {
+    return localStorage.getItem('babeldoc_last_base_url') || 'https://api.deepseek.com/v1'
+  })
   const [newApiKey, setNewApiKey] = useState('')
-  const [newModel, setNewModel] = useState('')
+  const [newModel, setNewModel] = useState(() => {
+    return localStorage.getItem('babeldoc_last_model_name') || 'deepseek-chat'
+  })
   const [showNewApiKey, setShowNewApiKey] = useState(false)
   const [addingModel, setAddingModel] = useState(false)
   const [savingQps, setSavingQps] = useState(false)
@@ -138,9 +142,9 @@ const Settings = () => {
       
       if (response.ok) {
         toast.success('模型已添加')
-        setNewBaseUrl('')
+        localStorage.setItem('babeldoc_last_base_url', newBaseUrl.trim())
+        localStorage.setItem('babeldoc_last_model_name', newModel.trim())
         setNewApiKey('')
-        setNewModel('')
         loadModels()
       } else {
         const error = await response.json()
@@ -422,7 +426,8 @@ const Settings = () => {
                   type="text"
                   value={newBaseUrl}
                   onChange={(e) => setNewBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
+                  placeholder="https://api.deepseek.com/v1"
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>
@@ -437,6 +442,7 @@ const Settings = () => {
                     value={newApiKey}
                     onChange={(e) => setNewApiKey(e.target.value)}
                     placeholder="请输入API密钥"
+                    autoComplete="new-password"
                     className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                   />
                   <button
@@ -461,7 +467,8 @@ const Settings = () => {
                   type="text"
                   value={newModel}
                   onChange={(e) => setNewModel(e.target.value)}
-                  placeholder="gpt-4o"
+                  placeholder="deepseek-chat"
+                  autoComplete="off"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>
