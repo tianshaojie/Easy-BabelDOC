@@ -69,7 +69,8 @@ async def start_translation(request: TranslationRequest, authorization: Optional
             no_dual=request.no_dual,
             no_mono=request.no_mono,
             qps=request.qps,
-            glossaries=glossaries
+            glossaries=glossaries,
+            watermark_output_mode=False
         )
         
         request_config = request.model_dump(exclude=SENSITIVE_CONFIG_KEYS)
