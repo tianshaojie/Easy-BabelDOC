@@ -411,7 +411,7 @@ const Settings = () => {
           </div>
 
           <div className="bg-white rounded-lg border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">添加模型</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">添加模型（仅支持兼容OpenAI的大语言模型）</h2>
             
             <div className="space-y-4">
               <div>
