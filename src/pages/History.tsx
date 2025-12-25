@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { History as HistoryIcon, Clock, FileText, Download, Trash2, Eye, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
+import { History as HistoryIcon, Clock, FileText, Download, Trash2, Eye, CheckCircle, AlertCircle, RefreshCw, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { API_ENDPOINTS } from '@/config/api'
 import { authUtils } from '@/utils/auth'
@@ -244,6 +244,28 @@ const History = () => {
     }
   }
 
+  const markTaskAsFailed = async (taskId: string) => {
+    if (!window.confirm('确定要将此任务标记为失败吗？')) return
+    
+    try {
+      const response = await fetch(API_ENDPOINTS.translationMarkFailed(taskId), {
+        method: 'POST',
+        headers: authUtils.getAuthHeaders()
+      })
+      
+      if (response.ok) {
+        toast.success('任务已标记为失败')
+        loadHistory()
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || '标记失败')
+      }
+    } catch (error) {
+      console.error('Mark failed:', error)
+      toast.error('网络错误，标记失败')
+    }
+  }
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto">
@@ -422,7 +444,7 @@ const History = () => {
                     </div>
                     
                     {item.error && (
-                      <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+                      <div className="mt-1 text-xs text-red-600 truncate">
                         错误：{item.error}
                       </div>
                     )}
@@ -447,6 +469,16 @@ const History = () => {
                     >
                       <Eye className="h-4 w-4" />
                     </button>
+                    
+                    {item.status === 'running' && (
+                      <button
+                        onClick={() => markTaskAsFailed(item.task_id)}
+                        className="text-orange-600 hover:text-orange-800 p-2 rounded-lg hover:bg-orange-50 transition-colors"
+                        title="标记为失败（用于处理僵尸任务）"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    )}
                     
                     {item.status === 'completed' && item.result && (
                       <>

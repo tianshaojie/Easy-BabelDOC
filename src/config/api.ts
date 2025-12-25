@@ -22,6 +22,8 @@ export const API_ENDPOINTS = {
   translationStatus: (taskId: string) => `${API_BASE_URL}/api/translation/${taskId}/status`,
   translationWs: (taskId: string) => `${WS_BASE_URL}/api/translation/${taskId}/ws`,
   translationDownload: (taskId: string, type: string) => `${API_BASE_URL}/api/translation/${taskId}/download/${type}`,
+  translationCancel: (taskId: string) => `${API_BASE_URL}/api/translation/${taskId}/cancel`,
+  translationMarkFailed: (taskId: string) => `${API_BASE_URL}/api/translation/${taskId}/mark-failed`,
   
   // 翻译历史
   translations: `${API_BASE_URL}/api/translations`,

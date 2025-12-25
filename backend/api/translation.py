@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api", tags=["translation"])
 
 active_translations: Dict[str, Dict] = {}
 connected_clients: Dict[str, WebSocket] = {}
+active_tasks: Dict[str, asyncio.Task] = {}
 
 @router.post("/translate")
 async def start_translation(request: TranslationRequest, authorization: Optional[str] = Header(None)):
@@ -92,7 +93,8 @@ async def start_translation(request: TranslationRequest, authorization: Optional
         active_translations[task_id] = task_data
         add_to_history(task_data)
         
-        asyncio.create_task(run_translation(task_id, config))
+        task = asyncio.create_task(run_translation(task_id, config))
+        active_tasks[task_id] = task
         
         return {"task_id": task_id, "status": "started"}
         
@@ -110,6 +112,10 @@ async def run_translation(task_id: str, config):
     
     try:
         async for event in high_level.async_translate(config):
+            # 检查任务是否被取消
+            if task_id not in active_translations:
+                break
+            
             if task_id in active_translations:
                 if event["type"] == "progress_update":
                     active_translations[task_id].update({
@@ -150,6 +156,16 @@ async def run_translation(task_id: str, config):
                     except:
                         pass
                         
+    except asyncio.CancelledError:
+        # 任务被取消
+        if task_id in active_translations:
+            active_translations[task_id].update({
+                "status": "cancelled",
+                "error": "任务已被取消",
+                "end_time": datetime.now().isoformat()
+            })
+            add_to_history(active_translations[task_id])
+        raise
     except Exception as e:
         if task_id in active_translations:
             active_translations[task_id].update({
@@ -158,6 +174,10 @@ async def run_translation(task_id: str, config):
                 "end_time": datetime.now().isoformat()
             })
             add_to_history(active_translations[task_id])
+    finally:
+        # 清理任务
+        if task_id in active_tasks:
+            del active_tasks[task_id]
 
 @router.get("/translation/{task_id}/status")
 async def get_translation_status(task_id: str):
@@ -283,3 +303,77 @@ async def delete_multiple_translations(task_ids: List[str]):
         raise HTTPException(status_code=404, detail="没有找到要删除的翻译记录")
     
     return {"message": f"已删除 {deleted_count} 条翻译记录"}
+
+@router.post("/translation/{task_id}/cancel")
+async def cancel_translation(task_id: str):
+    """取消正在进行的翻译任务"""
+    from utils.history import add_to_history
+    
+    # 检查任务是否存在
+    if task_id not in active_translations:
+        raise HTTPException(status_code=404, detail="任务不存在或已完成")
+    
+    task = active_translations[task_id]
+    
+    # 检查任务是否正在运行
+    if task["status"] != "running":
+        raise HTTPException(status_code=400, detail="任务未在运行中")
+    
+    # 取消asyncio任务
+    if task_id in active_tasks:
+        active_tasks[task_id].cancel()
+    
+    # 更新任务状态
+    task.update({
+        "status": "cancelled",
+        "error": "用户取消了翻译",
+        "end_time": datetime.now().isoformat()
+    })
+    add_to_history(task)
+    
+    # 从活动任务中移除
+    if task_id in active_translations:
+        del active_translations[task_id]
+    
+    # 通知WebSocket客户端
+    if task_id in connected_clients:
+        try:
+            await connected_clients[task_id].send_text(json.dumps({
+                "type": "error",
+                "error": "翻译已被取消"
+            }))
+        except:
+            pass
+    
+    return {"message": "翻译任务已取消"}
+
+@router.post("/translation/{task_id}/mark-failed")
+async def mark_translation_failed(task_id: str):
+    """手动标记任务为失败（用于处理僵尸任务）"""
+    from utils.history import get_task, add_to_history
+    
+    # 从数据库获取任务
+    task = get_task(task_id, active_translations)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    # 只能标记运行中的任务
+    if task["status"] != "running":
+        raise HTTPException(status_code=400, detail="只能标记运行中的任务")
+    
+    # 更新任务状态
+    task.update({
+        "status": "error",
+        "error": "任务异常中断（服务重启或其他原因）",
+        "end_time": datetime.now().isoformat()
+    })
+    add_to_history(task)
+    
+    # 从活动任务中移除
+    if task_id in active_translations:
+        del active_translations[task_id]
+    if task_id in active_tasks:
+        active_tasks[task_id].cancel()
+        del active_tasks[task_id]
+    
+    return {"message": "任务已标记为失败"}

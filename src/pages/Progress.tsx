@@ -92,17 +92,21 @@ const Progress = () => {
 
   const handleWebSocketMessage = (data: any) => {
     if (data.type === 'progress_update') {
+      const newProgress = data.overall_progress || 0
+      const newStage = data.stage || (status?.stage || '')
+      const newMessage = data.message || (status?.message || '')
+      
       setStatus(prev => prev ? {
         ...prev,
-        progress: data.overall_progress || 0,
-        stage: data.stage || prev.stage,
-        message: data.message || prev.message
+        progress: newProgress,
+        stage: newStage,
+        message: newMessage
       } : null)
       
-      // 添加日志
-      if (data.message) {
-        setLogs(prev => [...prev, `${new Date().toLocaleTimeString()}: ${data.message}`])
-      }
+      // 添加进度日志（倒序插入）
+      const timestamp = new Date().toLocaleTimeString()
+      const logEntry = `${timestamp} - [${Math.round(newProgress)}%] ${newStage}${newMessage ? ': ' + newMessage : ''}`
+      setLogs(prev => [logEntry, ...prev])
     } else if (data.type === 'finish') {
       setStatus(prev => prev ? {
         ...prev,
@@ -112,6 +116,10 @@ const Progress = () => {
         result: data.translate_result,
         end_time: new Date().toISOString()
       } : null)
+      
+      // 添加完成日志
+      const timestamp = new Date().toLocaleTimeString()
+      setLogs(prev => [`${timestamp} - [100%] 翻译完成`, ...prev])
       
       toast.success('翻译完成！')
       setTimeout(() => {
@@ -125,6 +133,10 @@ const Progress = () => {
         end_time: new Date().toISOString()
       } : null)
       
+      // 添加错误日志
+      const timestamp = new Date().toLocaleTimeString()
+      setLogs(prev => [`${timestamp} - [错误] ${data.error}`, ...prev])
+      
       toast.error('翻译失败')
     }
   }
@@ -133,9 +145,21 @@ const Progress = () => {
     if (!taskId || !window.confirm('确定要取消翻译吗？')) return
 
     try {
-      // 这里应该调用取消API，但当前后端没有实现
-      toast.info('取消功能暂未实现')
+      const response = await fetch(API_ENDPOINTS.translationCancel(taskId), {
+        method: 'POST'
+      })
+      
+      if (response.ok) {
+        toast.success('翻译已取消')
+        setTimeout(() => {
+          navigate('/history')
+        }, 1500)
+      } else {
+        const error = await response.json()
+        toast.error(error.detail || '取消失败')
+      }
     } catch (error) {
+      console.error('Cancel failed:', error)
       toast.error('取消失败')
     }
   }
@@ -265,9 +289,9 @@ const Progress = () => {
             <h3 className="text-lg font-semibold text-gray-900 mb-4">翻译日志</h3>
             <div className="bg-gray-50 rounded-lg p-4 max-h-64 overflow-y-auto">
               {logs.length > 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {logs.map((log, index) => (
-                    <div key={index} className="text-sm text-gray-700 font-mono">
+                    <div key={index} className="text-sm text-gray-700 font-mono border-b border-gray-200 pb-1 last:border-b-0">
                       {log}
                     </div>
                   ))}
