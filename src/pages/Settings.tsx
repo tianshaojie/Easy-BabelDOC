@@ -668,11 +668,21 @@ const Settings = () => {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">许可证信息</h2>
           <div className="space-y-4 text-sm text-gray-600">
             <div>
-              <h3 className="font-medium text-gray-900 mb-2">Easy-BabelDOC</h3>
+              <h3 className="font-medium text-gray-900 mb-2">tianshaojie/Easy-BabelDOC</h3>
+              <p>版本: 1.0.0</p>
+              <p>作者: tianshaojie</p>
+              <p>仓库: <a href="https://github.com/tianshaojie/Easy-BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Easy-BabelDOC</a></p>
+              <p>许可证: GNU Affero General Public License (AGPL) v3</p>
+              <p>本项目: fork 自 <a href="https://github.com/tianshaojie/Easy-BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">lijiapeng365/Easy-BabelDOC</a>，并遵循AGPL-3.0许可证要求</p>
+            </div>
+            
+            {/* <div className="border-t pt-4">
+              <h3 className="font-medium text-gray-900 mb-2">lijiapeng365/Easy-BabelDOC</h3>
               <p>版本: 1.0.0</p>
               <p>作者: lijiapeng365</p>
+              <p>仓库: <a href="https://github.com/lijiapeng365/Easy-BabelDOC" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Easy-BabelDOC</a></p>
               <p>许可证: GNU Affero General Public License (AGPL) v3</p>
-            </div>
+            </div> */}
             
             <div className="border-t pt-4">
               <h4 className="font-medium text-gray-900 mb-2">重要声明</h4>
