@@ -3,6 +3,7 @@ from typing import List, Optional
 
 class TranslationRequest(BaseModel):
     file_id: str
+    original_filename: Optional[str] = None
     lang_in: str
     lang_out: str
     model: str = "gpt-4o-mini"

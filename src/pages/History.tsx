@@ -380,10 +380,16 @@ const History = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
-                        <FileText className="h-5 w-5 text-gray-400" />
-                        <div>
-                          <h3 className="text-sm font-medium text-gray-900 truncate">
-                            {item.filename}
+                        <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-medium text-gray-900" style={{ width: '320px' }} title={item.filename}>
+                            {(() => {
+                              const nameWithoutExt = item.filename.replace(/\.pdf$/i, '')
+                              if (nameWithoutExt.length > 36) {
+                                return nameWithoutExt.substring(0, 36) + '...pdf'
+                              }
+                              return item.filename
+                            })()}
                           </h3>
                           <p className="text-xs text-gray-500">
                             {getLanguageName(item.source_lang)} → {getLanguageName(item.target_lang)} | {item.model}
@@ -405,9 +411,15 @@ const History = () => {
                           </div>
                         )}
                         
-                        <div className="text-sm text-gray-500">
-                          {new Date(item.start_time).toLocaleString()}
-                        </div>
+                        {item.error ? (
+                          <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded max-w-xs truncate" title={item.error}>
+                            错误：{item.error}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500">
+                            {new Date(item.start_time).toLocaleString()}
+                          </div>
+                        )}
                         
                         {item.result && (
                       <div className="text-sm text-gray-500">
@@ -442,12 +454,6 @@ const History = () => {
                     )}
                       </div>
                     </div>
-                    
-                    {item.error && (
-                      <div className="mt-1 text-xs text-red-600 truncate">
-                        错误：{item.error}
-                      </div>
-                    )}
                     
                     {item.status === 'running' && (
                       <div className="mt-2">

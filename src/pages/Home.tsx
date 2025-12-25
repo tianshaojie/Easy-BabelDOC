@@ -227,6 +227,7 @@ const Home = () => {
         },
         body: JSON.stringify({
           file_id: uploadedFile.file_id,
+          original_filename: uploadedFile.filename,
           ...processedConfig
         })
       })

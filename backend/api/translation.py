@@ -80,7 +80,7 @@ async def start_translation(request: TranslationRequest, authorization: Optional
             "task_id": task_id,
             "user_id": user_id,
             "status": "running",
-            "filename": f"{request.file_id}.pdf",
+            "filename": request.original_filename or f"{request.file_id}.pdf",
             "source_lang": request.lang_in,
             "target_lang": request.lang_out,
             "model": request.model,
