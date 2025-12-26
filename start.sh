@@ -29,10 +29,14 @@ fi
 # 显示使用说明
 show_usage() {
     echo -e "${BLUE}使用方法:${NC}"
-    echo -e "  $0              # 启动前端和后端服务"
-    echo -e "  $0 backend      # 仅启动后端服务"
-    echo -e "  $0 frontend     # 仅启动前端服务"
-    echo -e "  $0 dev          # 开发模式(前台运行前端)"
+    echo -e "  $0                  # 启动前端和后端服务(自动重新构建前端)"
+    echo -e "  $0 backend          # 仅启动后端服务"
+    echo -e "  $0 frontend         # 仅启动前端服务(自动重新构建)"
+    echo -e "  $0 dev              # 开发模式(前台运行前端,支持热重载)"
+    echo -e ""
+    echo -e "${BLUE}说明:${NC}"
+    echo -e "  - 默认启动会自动重新构建前端,确保使用最新代码"
+    echo -e "  - 开发模式推荐用于本地开发,支持热重载"
 }
 
 # 检查服务是否已运行
@@ -95,6 +99,8 @@ start_backend() {
     
     if ps -p $(cat "$BACKEND_PID_FILE") > /dev/null 2>&1; then
         echo -e "${GREEN}✓ 后端服务启动成功 (PID: $(cat "$BACKEND_PID_FILE"))${NC}"
+        echo -e "${GREEN}  API地址: http://localhost:58273${NC}"
+        echo -e "${GREEN}  API文档: http://localhost:58273/docs${NC}"
         echo -e "${GREEN}  日志文件: $BACKEND_LOG_FILE${NC}"
         return 0
     else
@@ -106,6 +112,8 @@ start_backend() {
 
 # 启动前端服务
 start_frontend() {
+    local force_rebuild=${1:-false}
+    
     echo -e "${GREEN}========================================${NC}"
     echo -e "${GREEN}启动前端服务...${NC}"
     echo -e "${GREEN}========================================${NC}"
@@ -125,8 +133,23 @@ start_frontend() {
         return 1
     fi
     
-    # 启动前端
+    # 默认总是重新构建前端(服务器部署场景)
     cd "$SCRIPT_DIR"
+    
+    if [ "$force_rebuild" = false ]; then
+        echo -e "${YELLOW}正在构建前端...${NC}"
+    else
+        echo -e "${YELLOW}强制重新构建前端...${NC}"
+    fi
+    
+    npm run build
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}✗ 前端构建失败${NC}"
+        return 1
+    fi
+    echo -e "${GREEN}✓ 前端构建完成${NC}"
+    
+    # 启动前端预览服务
     nohup npm run preview > "$FRONTEND_LOG_FILE" 2>&1 &
     echo $! > "$FRONTEND_PID_FILE"
     
@@ -134,6 +157,7 @@ start_frontend() {
     
     if ps -p $(cat "$FRONTEND_PID_FILE") > /dev/null 2>&1; then
         echo -e "${GREEN}✓ 前端服务启动成功 (PID: $(cat "$FRONTEND_PID_FILE"))${NC}"
+        echo -e "${GREEN}  访问地址: http://localhost:4173${NC}"
         echo -e "${GREEN}  日志文件: $FRONTEND_LOG_FILE${NC}"
         return 0
     else
@@ -165,14 +189,25 @@ start_dev() {
     npm run dev
 }
 
+# 解析参数
+FORCE_REBUILD=false
+COMMAND="${1:-all}"
+
+# 检查是否有 --rebuild 参数
+for arg in "$@"; do
+    if [ "$arg" = "--rebuild" ]; then
+        FORCE_REBUILD=true
+    fi
+done
+
 # 主逻辑
-case "${1:-all}" in
+case "$COMMAND" in
     backend)
         start_backend
         exit $?
         ;;
     frontend)
-        start_frontend
+        start_frontend $FORCE_REBUILD
         exit $?
         ;;
     dev)
@@ -183,7 +218,7 @@ case "${1:-all}" in
         start_backend
         BACKEND_STATUS=$?
         echo ""
-        start_frontend
+        start_frontend $FORCE_REBUILD
         FRONTEND_STATUS=$?
         
         echo ""
@@ -200,9 +235,32 @@ case "${1:-all}" in
             exit 1
         fi
         ;;
-    -h|--help|help)
-        show_usage
-        exit 0
+    -h|--help|help|--rebuild)
+        if [ "$COMMAND" = "--rebuild" ]; then
+            # --rebuild 作为第一个参数时，启动所有服务并重新构建
+            start_backend
+            BACKEND_STATUS=$?
+            echo ""
+            start_frontend true
+            FRONTEND_STATUS=$?
+            
+            echo ""
+            echo -e "${GREEN}========================================${NC}"
+            if [ $BACKEND_STATUS -eq 0 ] && [ $FRONTEND_STATUS -eq 0 ]; then
+                echo -e "${GREEN}✓ Easy-BabelDOC 所有服务启动成功${NC}"
+                echo -e "${GREEN}========================================${NC}"
+                echo -e "${GREEN}后端日志: tail -f $BACKEND_LOG_FILE${NC}"
+                echo -e "${GREEN}前端日志: tail -f $FRONTEND_LOG_FILE${NC}"
+                exit 0
+            else
+                echo -e "${RED}✗ 部分服务启动失败${NC}"
+                echo -e "${RED}========================================${NC}"
+                exit 1
+            fi
+        else
+            show_usage
+            exit 0
+        fi
         ;;
     *)
         echo -e "${RED}错误: 未知参数 '$1'${NC}"

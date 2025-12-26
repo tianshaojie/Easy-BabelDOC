@@ -68,18 +68,20 @@ npm run build
 # 确保已激活 conda 环境
 conda activate babeldoc
 
-# 启动前端和后端服务
+# 启动前端和后端服务（会自动重新构建前端）
 ./start.sh
 
 # 仅启动后端
 ./start.sh backend
 
-# 仅启动前端
+# 仅启动前端（会自动重新构建）
 ./start.sh frontend
 
-# 开发模式（后端后台运行，前端前台运行）
+# 开发模式（后端后台运行，前端前台运行，支持热重载）
 ./start.sh dev
 ```
+
+> **注意**: `./start.sh` 默认会重新构建前端代码,确保使用最新版本。开发时建议使用 `./start.sh dev` 模式,支持热重载。
 
 **停止所有服务**
 
@@ -106,9 +108,10 @@ tail -f /tmp/easy_babeldoc_frontend.log
 
 
 ### 访问应用
-- 前端：http://localhost:5173
-- 后端API：http://localhost:8000
-- API文档：http://localhost:8000/docs
+- 前端（生产模式）：http://localhost:4173
+- 前端（开发模式）：http://localhost:5173
+- 后端API：http://localhost:58273
+- API文档：http://localhost:58273/docs
 
 ## 使用说明
 
