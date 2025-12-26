@@ -5,6 +5,8 @@ import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
 export default defineConfig({
+  // 关键配置：必须添加这一行，注意前后都要有斜杠
+  base: '/t/', 
   plugins: [
     react({
       babel: {
@@ -29,7 +31,7 @@ export default defineConfig({
     // 设置为 true 即可允许所有域名
     allowedHosts: true, 
     // 同时也建议开启 host: true (即 0.0.0.0)，确保通过 IP 或域名能访问到服务
-    host: true 
+    host: true
   },
 
   // 预览环境 (npm run preview)
