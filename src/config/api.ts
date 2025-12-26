@@ -2,8 +2,8 @@
 // 默认端口与 backend/main.py 中的 determine_port 函数返回值保持一致
 
 const API_PORT = import.meta.env.VITE_API_PORT || '58273'
-const API_HOST = import.meta.env.VITE_API_HOST || 'localhost'
-const API_PROTOCOL = import.meta.env.VITE_API_PROTOCOL || 'http'
+const API_HOST = import.meta.env.VITE_API_HOST || window.location.hostname
+const API_PROTOCOL = import.meta.env.VITE_API_PROTOCOL || window.location.protocol.replace(':', '')
 const WS_PROTOCOL = API_PROTOCOL === 'https' ? 'wss' : 'ws'
 
 export const API_BASE_URL = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`
