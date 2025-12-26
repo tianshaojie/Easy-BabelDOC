@@ -34,36 +34,76 @@
 
 ### 环境要求
 - Node.js 18+
-- Python 3.8+
+- Python 3.12+
 - OpenAI API Key
 
-### 安装和运行
+### 安装步骤
 
-#### 方法一：使用启动脚本（推荐）
+#### 1. 创建 Conda 虚拟环境
 ```bash
-# Windows
-double-click start.bat
-```
+# 创建虚拟环境
+conda create -n babeldoc python=3.12
 
-#### 方法二：手动启动
-
-1. **启动后端服务**
-```bash
 # 激活虚拟环境
-backend\venv\Scripts\activate
+conda activate babeldoc
 
-# 启动后端
-python backend/main.py
+# 安装后端依赖
+pip install -r backend/requirements.txt
 ```
 
-2. **启动前端服务**
+#### 2. 安装前端依赖
 ```bash
-# 安装依赖（首次运行）
+# 安装前端依赖
 npm install
 
-# 启动前端
-npm run dev
+# 构建前端（生产环境）
+npm run build
 ```
+
+### 启动和停止
+
+**启动所有服务**
+
+```bash
+# 确保已激活 conda 环境
+conda activate babeldoc
+
+# 启动前端和后端服务
+./start.sh
+
+# 仅启动后端
+./start.sh backend
+
+# 仅启动前端
+./start.sh frontend
+
+# 开发模式（后端后台运行，前端前台运行）
+./start.sh dev
+```
+
+**停止所有服务**
+
+```bash
+# 停止前端和后端服务
+./stop.sh
+
+# 仅停止后端
+./stop.sh backend
+
+# 仅停止前端
+./stop.sh frontend
+```
+
+**查看日志**
+
+```bash
+# 查看后端日志
+tail -f /tmp/easy_babeldoc_backend.log
+
+# 查看前端日志
+tail -f /tmp/easy_babeldoc_frontend.log
+```
+
 
 ### 访问应用
 - 前端：http://localhost:5173
@@ -100,19 +140,23 @@ npm run dev
 ## 项目结构
 
 ```
-BabelDOC/
+Easy-BabelDOC/
 ├── backend/                 # Python后端
-│   ├── venv/               # Python虚拟环境
+│   ├── api/                # API路由
+│   ├── db/                 # 数据库模块
 │   ├── main.py             # FastAPI应用入口
-│   └── requirements.txt    # Python依赖
+│   ├── requirements.txt    # Python依赖
+│   └── stop.sh            # 后端停止脚本
 ├── src/                    # React前端源码
 │   ├── components/         # 组件
 │   ├── pages/             # 页面
 │   ├── hooks/             # 自定义Hooks
 │   └── lib/               # 工具函数
 ├── public/                # 静态资源
-├── .trae/documents/       # 项目文档
-├── start.bat             # Windows启动脚本
+├── dist/                  # 前端构建产物
+├── start.sh              # 项目启动脚本
+├── stop.sh               # 项目停止脚本
+├── package.json          # 前端依赖配置
 └── README.md             # 项目说明
 ```
 
@@ -120,22 +164,31 @@ BabelDOC/
 
 ### 前端开发
 ```bash
-npm run dev      # 开发模式
+npm run dev      # 开发模式（热重载）
 npm run build    # 构建生产版本
 npm run preview  # 预览生产版本
+npm run lint     # 代码检查
 ```
 
 ### 后端开发
 ```bash
 # 激活虚拟环境
-backend\venv\Scripts\activate
+conda activate babeldoc
 
 # 安装新依赖
 pip install package_name
 pip freeze > backend/requirements.txt
 
-# 运行后端
-python backend/main.py
+# 运行后端（开发模式）
+cd backend
+python main.py
+```
+
+### 开发模式启动
+```bash
+# 推荐：使用开发模式启动
+# 后端后台运行，前端前台运行（支持热重载）
+./start.sh dev
 ```
 
 ## API文档
@@ -155,16 +208,18 @@ python backend/main.py
 1. **API密钥安全**：API密钥存储在浏览器本地，请妥善保管
 2. **文件大小限制**：建议上传文件不超过50MB
 3. **网络连接**：翻译过程需要稳定的网络连接
-4. **虚拟环境**：后端使用独立的Python虚拟环境，避免依赖冲突
+4. **虚拟环境**：后端使用 Conda 管理虚拟环境，避免依赖冲突
+5. **C++ 库兼容**：服务器部署时，启动脚本会自动配置 LD_LIBRARY_PATH 解决 C++ 标准库兼容问题
 
 ## 故障排除
 
 ### 常见问题
 
 1. **后端启动失败**
-   - 检查Python版本是否为3.8+
-   - 确认虚拟环境已激活
-   - 检查依赖是否正确安装
+   - 检查Python版本是否为3.12+
+   - 确认conda虚拟环境已激活：`conda activate babeldoc`
+   - 检查依赖是否正确安装：`pip install -r backend/requirements.txt`
+   - 查看后端日志：`tail -f /tmp/easy_babeldoc_backend.log`
 
 2. **前端编译错误**
    - 检查Node.js版本是否为18+
@@ -189,8 +244,8 @@ python backend/main.py
 
 ### 源代码获取
 
-本项目的完整源代码可在以下地址获取：
-- GitHub: https://github.com/lijiapeng365/Easy-BabelDOC
+- 本项目完整源代码地址：GitHub: https://github.com/tianshaojie/Easy-BabelDOC
+- 特别备注本项目fork至：GitHub: https://github.com/lijiapeng365/Easy-BabelDOC
 
 ### AGPL-3.0 关键要求
 
