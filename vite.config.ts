@@ -24,4 +24,18 @@ export default defineConfig({
     }), 
     tsconfigPaths()
   ],
+  // 开发环境 (npm run dev)
+  server: {
+    // 设置为 true 即可允许所有域名
+    allowedHosts: true, 
+    // 同时也建议开启 host: true (即 0.0.0.0)，确保通过 IP 或域名能访问到服务
+    host: true 
+  },
+
+  // 预览环境 (npm run preview)
+  preview: {
+    // 设置为 true 即可允许所有域名
+    allowedHosts: true,
+    host: true
+  }
 })
