@@ -57,6 +57,11 @@ fi
 # 启动服务
 echo -e "${GREEN}正在启动 Easy-BabelDOC 服务...${NC}"
 
+# 设置 LD_LIBRARY_PATH 使用 conda 环境的库
+if [ -n "$CONDA_PREFIX" ]; then
+    export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+fi
+
 # 使用nohup在后台运行，并将输出重定向到日志文件
 nohup python3 main.py > "$LOG_FILE" 2>&1 &
 
