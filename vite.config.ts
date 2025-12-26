@@ -5,8 +5,6 @@ import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
 export default defineConfig({
-  // 关键配置：必须添加这一行，注意前后都要有斜杠
-  base: '/t/', 
   plugins: [
     react({
       babel: {

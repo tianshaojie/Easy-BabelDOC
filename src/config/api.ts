@@ -6,8 +6,20 @@ const API_HOST = import.meta.env.VITE_API_HOST || window.location.hostname
 const API_PROTOCOL = import.meta.env.VITE_API_PROTOCOL || window.location.protocol.replace(':', '')
 const WS_PROTOCOL = API_PROTOCOL === 'https' ? 'wss' : 'ws'
 
-export const API_BASE_URL = `${API_PROTOCOL}://${API_HOST}:${API_PORT}`
-export const WS_BASE_URL = `${WS_PROTOCOL}://${API_HOST}:${API_PORT}`
+// 判断是否需要使用端口号
+// 本地开发(localhost/127.0.0.1)总是使用端口号
+// 生产环境(域名)通过 Nginx 反向代理,不使用端口号
+const isLocalhost = API_HOST === 'localhost' || API_HOST === '127.0.0.1'
+const usePort = isLocalhost || import.meta.env.VITE_USE_PORT === 'true'
+
+const API_URL = usePort
+  ? `${API_PROTOCOL}://${API_HOST}:${API_PORT}`
+  : `${API_PROTOCOL}://${API_HOST}`
+
+export const API_BASE_URL = API_URL
+export const WS_BASE_URL = usePort
+  ? `${WS_PROTOCOL}://${API_HOST}:${API_PORT}`
+  : `${WS_PROTOCOL}://${API_HOST}`
 
 // API 端点
 export const API_ENDPOINTS = {
