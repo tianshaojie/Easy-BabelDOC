@@ -150,7 +150,7 @@ start_frontend() {
     echo -e "${GREEN}✓ 前端构建完成${NC}"
     
     # 启动前端预览服务
-    nohup npm run preview > "$FRONTEND_LOG_FILE" 2>&1 &
+    nohup npm run preview -- --host > "$FRONTEND_LOG_FILE" 2>&1 &
     echo $! > "$FRONTEND_PID_FILE"
     
     sleep 3
