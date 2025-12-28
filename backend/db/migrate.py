@@ -95,9 +95,42 @@ def migration_v2_add_models_table(cursor: sqlite3.Cursor):
         """)
         logger.info("✓ models表创建完成")
 
+def migration_v3_add_role_and_system_model(cursor: sqlite3.Cursor):
+    """版本3: 添加用户角色和系统模型支持"""
+    logger.info("执行迁移 v3: 添加用户角色和系统模型支持")
+    
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = [row[1] for row in cursor.fetchall()]
+    
+    if 'role' not in user_columns:
+        logger.info("添加role列到users表...")
+        cursor.execute("""
+            ALTER TABLE users 
+            ADD COLUMN role TEXT DEFAULT 'user'
+        """)
+        cursor.execute("""
+            UPDATE users SET role = CASE 
+                WHEN is_guest = 1 THEN 'guest'
+                ELSE 'user'
+            END
+        """)
+        logger.info("✓ users表添加role字段完成")
+    
+    cursor.execute("PRAGMA table_info(models)")
+    model_columns = [row[1] for row in cursor.fetchall()]
+    
+    if 'is_system' not in model_columns:
+        logger.info("添加is_system列到models表...")
+        cursor.execute("""
+            ALTER TABLE models 
+            ADD COLUMN is_system INTEGER DEFAULT 0
+        """)
+        logger.info("✓ models表添加is_system字段完成")
+
 MIGRATIONS: List[Migration] = [
     Migration(1, "添加用户支持", migration_v1_add_user_support),
     Migration(2, "添加模型配置表", migration_v2_add_models_table),
+    Migration(3, "添加用户角色和系统模型支持", migration_v3_add_role_and_system_model),
 ]
 
 def get_current_version(cursor: sqlite3.Cursor) -> int:

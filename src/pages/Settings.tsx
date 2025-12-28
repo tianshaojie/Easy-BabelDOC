@@ -18,6 +18,7 @@ interface ModelItem {
   api_key: string
   model: string
   is_default: boolean
+  is_system: boolean
   created_at: string
 }
 
@@ -158,7 +159,13 @@ const Settings = () => {
     }
   }
   
-  const deleteModel = async (modelId: number) => {
+  const deleteModel = async (modelId: number, isSystem: boolean) => {
+    // 检查是否为系统内置模型,只有admin可以删除
+    if (isSystem && user?.role !== 'admin') {
+      toast.error('系统内置模型不能删除')
+      return
+    }
+    
     if (!window.confirm('确定要删除这个模型配置吗？')) return
     
     try {
@@ -176,7 +183,8 @@ const Settings = () => {
         toast.success('模型已删除')
         loadModels()
       } else {
-        toast.error('删除失败')
+        const errorData = await response.json().catch(() => ({}))
+        toast.error(errorData.detail || '删除失败')
       }
     } catch (error) {
       console.error('Delete model failed:', error)
@@ -300,9 +308,24 @@ const Settings = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
 
-  const groupModelsByBaseUrl = () => {
-    const grouped: { [key: string]: ModelItem[] } = {}
+  const groupModelsByType = () => {
+    const systemModels: ModelItem[] = []
+    const userModels: ModelItem[] = []
+    
     models.forEach(model => {
+      if (model.is_system) {
+        systemModels.push(model)
+      } else {
+        userModels.push(model)
+      }
+    })
+    
+    return { systemModels, userModels }
+  }
+  
+  const groupModelsByBaseUrl = (modelList: ModelItem[]) => {
+    const grouped: { [key: string]: ModelItem[] } = {}
+    modelList.forEach(model => {
       if (!grouped[model.base_url]) {
         grouped[model.base_url] = []
       }
@@ -356,54 +379,132 @@ const Settings = () => {
             <h2 className="text-xl font-semibold text-gray-900 mb-4">模型列表</h2>
             
             {models.length > 0 ? (
-              <div className="space-y-4">
-                {Object.entries(groupModelsByBaseUrl()).map(([baseUrl, modelList]) => (
-                  <div key={baseUrl} className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-medium text-gray-700 mb-3 flex items-center">
-                      <Globe className="h-4 w-4 mr-2" />
-                      {baseUrl}
-                    </h3>
-                    <div className="space-y-2">
-                      {modelList.map(model => (
-                        <div key={model.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="font-medium text-gray-900">{model.model}</span>
-                              {model.is_default && (
-                                <span className="px-2 py-1 text-xs bg-pink-100 text-pink-600 rounded-full flex items-center">
-                                  <Star className="h-3 w-3 mr-1 fill-current" />
-                                  默认
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              API Key: {model.api_key.substring(0, 10)}...
-                            </p>
-                          </div>
-                          
-                          <div className="flex items-center space-x-2">
-                            {!model.is_default && (
-                              <button
-                                onClick={() => setDefaultModel(model.id)}
-                                className="text-gray-600 hover:text-pink-600 p-2 rounded-lg hover:bg-pink-50 transition-colors"
-                                title="设为默认"
-                              >
-                                <Star className="h-4 w-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => deleteModel(model.id)}
-                              className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors"
-                              title="删除"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+              <div className="space-y-6">
+                {(() => {
+                  const { systemModels, userModels } = groupModelsByType()
+                  return (
+                    <>
+                      {systemModels.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm mr-2">系统内置</span>
+                          </h3>
+                          <div className="space-y-4">
+                            {Object.entries(groupModelsByBaseUrl(systemModels)).map(([baseUrl, modelList]) => (
+                              <div key={baseUrl} className="border border-gray-200 rounded-lg p-4">
+                                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                                  <Globe className="h-4 w-4 mr-2" />
+                                  {baseUrl}
+                                </h4>
+                                <div className="space-y-2">
+                                  {modelList.map(model => (
+                                    <div key={model.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                      <div className="flex-1">
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-medium text-gray-900">{model.model}</span>
+                                          {model.is_default && (
+                                            <span className="px-2 py-1 text-xs bg-pink-100 text-pink-600 rounded-full flex items-center">
+                                              <Star className="h-3 w-3 mr-1 fill-current" />
+                                              默认
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          API Key: {model.api_key.substring(0, 10)}...
+                                        </p>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        {!model.is_default && (
+                                          <button
+                                            onClick={() => setDefaultModel(model.id)}
+                                            className="text-gray-600 hover:text-pink-600 p-2 rounded-lg hover:bg-pink-50 transition-colors"
+                                            title="设为默认"
+                                          >
+                                            <Star className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => deleteModel(model.id, model.is_system)}
+                                          className={`p-2 rounded-lg transition-colors ${
+                                            model.is_system && user?.role !== 'admin'
+                                              ? 'text-gray-400 cursor-not-allowed' 
+                                              : 'text-red-600 hover:text-red-800 hover:bg-red-50'
+                                          }`}
+                                          title={model.is_system && user?.role !== 'admin' ? "系统内置模型不能删除" : "删除"}
+                                          disabled={model.is_system && user?.role !== 'admin'}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      )}
+                      
+                      {userModels.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-medium text-gray-800 mb-3 flex items-center">
+                            <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm mr-2">用户自定义</span>
+                          </h3>
+                          <div className="space-y-4">
+                            {Object.entries(groupModelsByBaseUrl(userModels)).map(([baseUrl, modelList]) => (
+                              <div key={baseUrl} className="border border-gray-200 rounded-lg p-4">
+                                <h4 className="font-medium text-gray-700 mb-3 flex items-center">
+                                  <Globe className="h-4 w-4 mr-2" />
+                                  {baseUrl}
+                                </h4>
+                                <div className="space-y-2">
+                                  {modelList.map(model => (
+                                    <div key={model.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                      <div className="flex-1">
+                                        <div className="flex items-center space-x-2">
+                                          <span className="font-medium text-gray-900">{model.model}</span>
+                                          {model.is_default && (
+                                            <span className="px-2 py-1 text-xs bg-pink-100 text-pink-600 rounded-full flex items-center">
+                                              <Star className="h-3 w-3 mr-1 fill-current" />
+                                              默认
+                                            </span>
+                                          )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                          API Key: {model.api_key.substring(0, 10)}...
+                                        </p>
+                                      </div>
+                                      
+                                      <div className="flex items-center space-x-2">
+                                        {!model.is_default && (
+                                          <button
+                                            onClick={() => setDefaultModel(model.id)}
+                                            className="text-gray-600 hover:text-pink-600 p-2 rounded-lg hover:bg-pink-50 transition-colors"
+                                            title="设为默认"
+                                          >
+                                            <Star className="h-4 w-4" />
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => deleteModel(model.id, model.is_system)}
+                                          className="text-red-600 hover:text-red-800 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                          title="删除"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500">

@@ -19,7 +19,7 @@ class UserManager:
         self.db = Database(DB_FILE)
         self.user_model = User(self.db)
     
-    def add_user(self, username: str, password: str, email: str = None, is_guest: bool = False):
+    def add_user(self, username: str, password: str, email: str = None, is_guest: bool = False, role: str = 'user'):
         """
         添加新用户
         
@@ -28,6 +28,7 @@ class UserManager:
             password: 原始密码（将自动哈希）
             email: 邮箱（可选）
             is_guest: 是否为游客账号
+            role: 用户角色 (guest/user/admin)
         
         Returns:
             str: 用户ID，如果失败返回None
@@ -39,20 +40,27 @@ class UserManager:
                 print(f"✗ 错误: 用户名 '{username}' 已存在")
                 return None
             
+            # 验证角色
+            if role not in ['guest', 'user', 'admin']:
+                print(f"✗ 错误: 无效的角色 '{role}'，必须是 guest/user/admin 之一")
+                return None
+            
             # 创建用户
             user_id = self.user_model.create(
                 username=username,
                 password=password,
                 email=email,
-                is_guest=is_guest
+                is_guest=is_guest,
+                role=role
             )
             
             if user_id:
+                role_display = {'guest': '游客', 'user': '普通用户', 'admin': '管理员'}.get(role, role)
                 print(f"✓ 成功创建用户:")
                 print(f"  - 用户ID: {user_id}")
                 print(f"  - 用户名: {username}")
                 print(f"  - 邮箱: {email or '未设置'}")
-                print(f"  - 类型: {'游客' if is_guest else '正式用户'}")
+                print(f"  - 角色: {role_display}")
                 return user_id
             else:
                 print("✗ 创建用户失败")
@@ -65,30 +73,30 @@ class UserManager:
     def list_users(self):
         """列出所有用户"""
         try:
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            cursor.execute("""
-                SELECT user_id, username, email, is_guest, created_at, last_login
-                FROM users
-                ORDER BY created_at DESC
-            """)
-            
-            users = cursor.fetchall()
-            
-            if not users:
-                print("数据库中没有用户")
-                return
-            
-            print(f"\n共有 {len(users)} 个用户:\n")
-            print(f"{'用户ID':<38} {'用户名':<20} {'邮箱':<30} {'类型':<10} {'创建时间':<20}")
-            print("-" * 130)
-            
-            for user in users:
-                user_id, username, email, is_guest, created_at, last_login = user
-                user_type = "游客" if is_guest else "正式用户"
-                email_display = email or "-"
-                print(f"{user_id:<38} {username:<20} {email_display:<30} {user_type:<10} {created_at:<20}")
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    SELECT user_id, username, email, is_guest, role, created_at, last_login
+                    FROM users
+                    ORDER BY created_at DESC
+                """)
+                
+                users = cursor.fetchall()
+                
+                if not users:
+                    print("数据库中没有用户")
+                    return
+                
+                print(f"\n共有 {len(users)} 个用户:\n")
+                print(f"{'用户ID':<38} {'用户名':<20} {'邮箱':<30} {'角色':<10} {'创建时间':<20}")
+                print("-" * 130)
+                
+                for user in users:
+                    user_id, username, email, is_guest, role, created_at, last_login = user
+                    role_display = {'guest': '游客', 'user': '普通用户', 'admin': '管理员'}.get(role or 'user', role or 'user')
+                    email_display = email or "-"
+                    print(f"{user_id:<38} {username:<20} {email_display:<30} {role_display:<10} {created_at:<20}")
             
         except Exception as e:
             print(f"✗ 列出用户时发生错误: {e}")
@@ -106,12 +114,12 @@ class UserManager:
                 print(f"✗ 用户 '{username}' 不存在")
                 return False
             
-            conn = self.db.get_connection()
-            cursor = conn.cursor()
-            
-            # 删除用户
-            cursor.execute("DELETE FROM users WHERE username = ?", (username,))
-            conn.commit()
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # 删除用户
+                cursor.execute("DELETE FROM users WHERE username = ?", (username,))
+                conn.commit()
             
             print(f"✓ 已删除用户: {username}")
             return True
@@ -177,6 +185,7 @@ def main():
     add_parser.add_argument('--password', required=True, help='密码')
     add_parser.add_argument('--email', help='邮箱（可选）')
     add_parser.add_argument('--guest', action='store_true', help='创建为游客账号')
+    add_parser.add_argument('--role', choices=['guest', 'user', 'admin'], default='user', help='用户角色 (guest/user/admin)')
     
     # 列出用户命令
     subparsers.add_parser('list', help='列出所有用户')
@@ -203,7 +212,8 @@ def main():
             username=args.username,
             password=args.password,
             email=args.email,
-            is_guest=args.guest
+            is_guest=args.guest,
+            role=args.role
         )
     
     elif args.command == 'list':

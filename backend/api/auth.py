@@ -28,6 +28,7 @@ async def login(request: LoginRequest):
         user_id=user['user_id'],
         username=user['username'],
         is_guest=bool(user['is_guest']),
+        role=user.get('role', 'user'),
         token=user['user_id']
     )
 
@@ -62,6 +63,7 @@ async def create_guest():
             user_id=user_id,
             username=username,
             is_guest=True,
+            role='guest',
             token=user_id
         )
     except Exception as e:
@@ -93,7 +95,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
         user_id=user['user_id'],
         username=user['username'],
         email=user.get('email'),
-        is_guest=bool(user['is_guest'])
+        is_guest=bool(user['is_guest']),
+        role=user.get('role', 'user')
     )
 
 @router.post("/logout")

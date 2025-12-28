@@ -41,6 +41,7 @@ class LoginResponse(BaseModel):
     user_id: str
     username: str
     is_guest: bool
+    role: str
     token: str
 
 class UserInfo(BaseModel):
@@ -48,18 +49,21 @@ class UserInfo(BaseModel):
     username: str
     email: Optional[str] = None
     is_guest: bool
+    role: str
 
 class ModelCreate(BaseModel):
     base_url: str
     api_key: str
     model: str
     is_default: bool = False
+    is_system: bool = False
 
 class ModelUpdate(BaseModel):
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     model: Optional[str] = None
     is_default: Optional[bool] = None
+    is_system: Optional[bool] = None
 
 class ModelInfo(BaseModel):
     id: int
@@ -68,4 +72,5 @@ class ModelInfo(BaseModel):
     api_key: str
     model: str
     is_default: bool
+    is_system: bool
     created_at: str

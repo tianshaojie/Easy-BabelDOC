@@ -16,7 +16,7 @@ const usePort = isLocalhost || import.meta.env.VITE_USE_PORT === 'true'
 const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
 
 const API_URL = usePort
-  ? `${API_PROTOCOL}://${API_HOST}:${API_PORT}`
+  ? `${API_PROTOCOL}://${API_HOST}:${API_PORT}${BASE_PATH}`
   : `${API_PROTOCOL}://${API_HOST}${BASE_PATH}`
 
 export const API_BASE_URL = API_URL
@@ -61,6 +61,7 @@ export const API_ENDPOINTS = {
   
   // 模型管理
   models: `${API_BASE_URL}/api/models`,
+  modelDefault: `${API_BASE_URL}/api/models/default`,
   modelUpdate: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}`,
   modelDelete: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}`,
   modelSetDefault: (modelId: number) => `${API_BASE_URL}/api/models/${modelId}/set-default`,

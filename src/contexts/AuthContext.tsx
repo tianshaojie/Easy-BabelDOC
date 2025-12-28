@@ -5,6 +5,7 @@ interface UserInfo {
   user_id: string
   username: string
   is_guest: boolean
+  role: string
   token: string
 }
 

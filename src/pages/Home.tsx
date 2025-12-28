@@ -33,6 +33,7 @@ interface ModelItem {
   api_key: string
   model: string
   is_default: boolean
+  is_system: boolean
   created_at: string
 }
 
@@ -77,8 +78,30 @@ const Home = () => {
       if (response.ok) {
         const data: ModelItem[] = await response.json()
         
+        // 排序逻辑:
+        // 1. 用户自定义的默认模型 (is_system=false, is_default=true)
+        // 2. 系统内置的默认模型 (is_system=true, is_default=true)
+        // 3. 用户自定义的其他模型 (is_system=false)
+        // 4. 系统内置的其他模型 (is_system=true)
+        const sortedData = [...data].sort((a, b) => {
+          // 用户自定义默认模型优先级最高
+          if (!a.is_system && a.is_default) return -1
+          if (!b.is_system && b.is_default) return 1
+          
+          // 系统内置默认模型次之
+          if (a.is_system && a.is_default && !(!b.is_system && b.is_default)) return -1
+          if (b.is_system && b.is_default && !(!a.is_system && a.is_default)) return 1
+          
+          // 用户自定义模型优先于系统内置模型
+          if (!a.is_system && b.is_system) return -1
+          if (a.is_system && !b.is_system) return 1
+          
+          // 同类型按创建时间排序
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })
+        
         // 转换为下拉框选项格式
-        const modelOptions = data.map(m => ({
+        const modelOptions = sortedData.map(m => ({
           value: m.model,
           name: m.model,
           baseUrl: m.base_url,
@@ -86,20 +109,23 @@ const Home = () => {
         }))
         setAvailableModels(modelOptions)
         
-        // 查找默认模型并设置
-        const defaultModel = data.find(m => m.is_default)
+        // 查找默认模型并设置 - 优先使用用户自定义的默认模型
+        const userDefaultModel = sortedData.find(m => !m.is_system && m.is_default)
+        const systemDefaultModel = sortedData.find(m => m.is_system && m.is_default)
+        const defaultModel = userDefaultModel || systemDefaultModel
+        
         if (defaultModel) {
           setConfig(prev => ({
             ...prev,
             model: defaultModel.model,
             base_url: defaultModel.base_url
           }))
-        } else if (data.length > 0) {
+        } else if (sortedData.length > 0) {
           // 如果没有默认模型，使用第一个
           setConfig(prev => ({
             ...prev,
-            model: data[0].model,
-            base_url: data[0].base_url
+            model: sortedData[0].model,
+            base_url: sortedData[0].base_url
           }))
         }
       }

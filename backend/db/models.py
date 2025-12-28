@@ -223,7 +223,7 @@ class User:
         """
         return hashlib.sha256(password.encode()).hexdigest()
     
-    def create(self, username: str, password: str, email: Optional[str] = None, is_guest: bool = False) -> Optional[str]:
+    def create(self, username: str, password: str, email: Optional[str] = None, is_guest: bool = False, role: str = 'user') -> Optional[str]:
         """创建用户
         
         Args:
@@ -231,6 +231,7 @@ class User:
             password: 密码
             email: 邮箱（可选）
             is_guest: 是否为游客
+            role: 用户角色 (guest/user/admin)
             
         Returns:
             用户ID或None（如果创建失败）
@@ -239,10 +240,13 @@ class User:
             user_id = str(uuid.uuid4())
             password_hash = self.hash_password(password)
             
+            if is_guest:
+                role = 'guest'
+            
             self.db.execute("""
-                INSERT INTO users (user_id, username, password_hash, email, is_guest)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, username, password_hash, email, 1 if is_guest else 0))
+                INSERT INTO users (user_id, username, password_hash, email, is_guest, role)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, username, password_hash, email, 1 if is_guest else 0, role))
             
             return user_id
         except Exception as e:
