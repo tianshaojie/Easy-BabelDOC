@@ -137,7 +137,11 @@ if __name__ == "__main__":
     )
     cli_args = parser.parse_args()
 
-    host = determine_host(cli_args.host)
+    # host = determine_host(cli_args.host)
+    if cli_args.host:
+        host = determine_host(cli_args.host)
+    else:
+        host = "0.0.0.0"
     port = determine_port(cli_args.port)
     port_search_limit = determine_port_search_limit(cli_args.port_search_limit)
 
