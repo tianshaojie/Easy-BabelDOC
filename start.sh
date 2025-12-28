@@ -94,16 +94,20 @@ start_backend() {
     
     # 启动后端
     cd "$SCRIPT_DIR/backend"
-    nohup python3 main.py > "$BACKEND_LOG_FILE" 2>&1 &
+    # 显式指定 --host 0.0.0.0 确保监听所有网卡
+    nohup python3 main.py --host 0.0.0.0 > "$BACKEND_LOG_FILE" 2>&1 &
     echo $! > "$BACKEND_PID_FILE"
     cd "$SCRIPT_DIR"
     
     sleep 2
     
     if ps -p $(cat "$BACKEND_PID_FILE") > /dev/null 2>&1; then
+        local actual_port=$(grep -oE "port=[0-9]+" "$BACKEND_LOG_FILE" | cut -d= -f2 | head -1)
+        actual_port=${actual_port:-58273}
         echo -e "${GREEN}✓ 后端服务启动成功 (PID: $(cat "$BACKEND_PID_FILE"))${NC}"
-        echo -e "${GREEN}  API地址: http://localhost:58273${NC}"
-        echo -e "${GREEN}  API文档: http://localhost:58273/docs${NC}"
+        echo -e "${GREEN}  本地访问: http://127.0.0.1:$actual_port${NC}"
+        echo -e "${GREEN}  全网监听: http://0.0.0.0:$actual_port${NC}"
+        echo -e "${GREEN}  API前缀: $EASY_BABELDOC_PREFIX/api${NC}"
         echo -e "${GREEN}  日志文件: $BACKEND_LOG_FILE${NC}"
         return 0
     else
@@ -160,7 +164,9 @@ start_frontend() {
     
     if ps -p $(cat "$FRONTEND_PID_FILE") > /dev/null 2>&1; then
         echo -e "${GREEN}✓ 前端服务启动成功 (PID: $(cat "$FRONTEND_PID_FILE"))${NC}"
-        echo -e "${GREEN}  访问地址: http://localhost:4173${NC}"
+        echo -e "${GREEN}  本地访问: http://127.0.0.1:4173${NC}"
+        echo -e "${GREEN}  全网监听: http://0.0.0.0:4173${NC}"
+        echo -e "${GREEN}  访问路径: /t/${NC}"
         echo -e "${GREEN}  日志文件: $FRONTEND_LOG_FILE${NC}"
         return 0
     else
