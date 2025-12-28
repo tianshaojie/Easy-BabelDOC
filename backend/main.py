@@ -60,11 +60,14 @@ async def spa_fallback(request: Request, exc: HTTPException):
     """Serve the React SPA for unknown non-API routes."""
     from pathlib import Path
     path = request.url.path
+    import os
+    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "/t").rstrip("/")
+    
     if (
         request.method == "GET"
         and FRONTEND_STATIC_DIR.exists()
         and FRONTEND_INDEX_FILE.exists()
-        and not path.startswith(("/api", "/docs", "/redoc", "/openapi"))
+        and not path.startswith((f"{global_prefix}/api", f"{global_prefix}/docs", f"{global_prefix}/redoc", f"{global_prefix}/openapi", "/api", "/docs", "/redoc", "/openapi"))
         and "." not in Path(path).name
     ):
         return FileResponse(FRONTEND_INDEX_FILE)
@@ -105,8 +108,11 @@ def run_server(host: str, preferred_port: int, port_search_limit: int = 10) -> N
     raise SystemExit(1)
 
 if FRONTEND_STATIC_DIR.exists():
-    logger.info("Serving frontend assets from %s", FRONTEND_STATIC_DIR)
-    app.mount("/", StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")
+    import os
+    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "/t").rstrip("/")
+    mount_path = global_prefix if global_prefix else "/"
+    logger.info("Serving frontend assets from %s at %s", FRONTEND_STATIC_DIR, mount_path)
+    app.mount(mount_path, StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")
 else:
     logger.warning(
         "Frontend build not found at %s. Only API routes will be available.",

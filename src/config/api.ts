@@ -12,14 +12,17 @@ const WS_PROTOCOL = API_PROTOCOL === 'https' ? 'wss' : 'ws'
 const isLocalhost = API_HOST === 'localhost' || API_HOST === '127.0.0.1'
 const usePort = isLocalhost || import.meta.env.VITE_USE_PORT === 'true'
 
+// 获取 Vite 配置的 base 路径 (默认为 '/')
+const BASE_PATH = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
+
 const API_URL = usePort
   ? `${API_PROTOCOL}://${API_HOST}:${API_PORT}`
-  : `${API_PROTOCOL}://${API_HOST}`
+  : `${API_PROTOCOL}://${API_HOST}${BASE_PATH}`
 
 export const API_BASE_URL = API_URL
 export const WS_BASE_URL = usePort
   ? `${WS_PROTOCOL}://${API_HOST}:${API_PORT}`
-  : `${WS_PROTOCOL}://${API_HOST}`
+  : `${WS_PROTOCOL}://${API_HOST}${BASE_PATH}`
 
 // API 端点
 export const API_ENDPOINTS = {

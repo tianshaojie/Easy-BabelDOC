@@ -26,6 +26,9 @@ else
     FRONTEND_LOG_FILE="$SCRIPT_DIR/.frontend.log"
 fi
 
+# 默认设置服务前缀为 /t (用于生产环境二级目录部署)
+export EASY_BABELDOC_PREFIX=${EASY_BABELDOC_PREFIX:-/t}
+
 # 显示使用说明
 show_usage() {
     echo -e "${BLUE}使用方法:${NC}"
