@@ -34,29 +34,32 @@ const Progress = () => {
     fetchStatus()
 
     // 建立WebSocket连接
-    const ws = new WebSocket(API_ENDPOINTS.translationWs(taskId))
+    const wsUrl = API_ENDPOINTS.translationWs(taskId)
+    console.log('Connecting to WebSocket:', wsUrl)
+    const ws = new WebSocket(wsUrl)
     
     ws.onopen = () => {
       setIsConnected(true)
-      console.log('WebSocket connected')
+      console.log('WebSocket connected successfully to:', wsUrl)
     }
 
     ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data)
       try {
         const data = JSON.parse(event.data)
         handleWebSocketMessage(data)
       } catch (error) {
-        console.error('Failed to parse WebSocket message:', error)
+        console.error('Failed to parse WebSocket message:', error, event.data)
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       setIsConnected(false)
-      console.log('WebSocket disconnected')
+      console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason)
     }
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      console.error('WebSocket error occurred:', error)
       setIsConnected(false)
     }
 

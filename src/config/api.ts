@@ -21,7 +21,7 @@ const API_URL = usePort
 
 export const API_BASE_URL = API_URL
 export const WS_BASE_URL = usePort
-  ? `${WS_PROTOCOL}://${API_HOST}:${API_PORT}`
+  ? `${WS_PROTOCOL}://${API_HOST}:${API_PORT}${BASE_PATH}`
   : `${WS_PROTOCOL}://${API_HOST}${BASE_PATH}`
 
 // API 端点
