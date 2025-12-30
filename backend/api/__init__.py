@@ -4,9 +4,9 @@ def register_routes(app):
     """注册所有API路由到FastAPI应用"""
     from . import health, upload, translation, glossary, files, auth, models
     
-    # 默认使用 /t 前缀，与 vite.config.ts 中的 base 保持一致
+    # 默认不再使用 /t 前缀
     import os
-    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "/t").rstrip("/")
+    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "").rstrip("/")
     
     app.include_router(health.router, prefix=global_prefix)
     app.include_router(upload.router, prefix=global_prefix)

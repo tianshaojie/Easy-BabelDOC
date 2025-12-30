@@ -61,7 +61,7 @@ async def spa_fallback(request: Request, exc: HTTPException):
     from pathlib import Path
     path = request.url.path
     import os
-    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "/t").rstrip("/")
+    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "").rstrip("/")
     
     if (
         request.method == "GET"
@@ -109,7 +109,7 @@ def run_server(host: str, preferred_port: int, port_search_limit: int = 10) -> N
 
 if FRONTEND_STATIC_DIR.exists():
     import os
-    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "/t").rstrip("/")
+    global_prefix = os.getenv("EASY_BABELDOC_PREFIX", "").rstrip("/")
     mount_path = global_prefix if global_prefix else "/"
     logger.info("Serving frontend assets from %s at %s", FRONTEND_STATIC_DIR, mount_path)
     app.mount(mount_path, StaticFiles(directory=str(FRONTEND_STATIC_DIR), html=True), name="frontend")

@@ -26,8 +26,6 @@ else
     FRONTEND_LOG_FILE="$SCRIPT_DIR/.frontend.log"
 fi
 
-# 默认设置服务前缀为 /t (用于生产环境二级目录部署)
-export EASY_BABELDOC_PREFIX=${EASY_BABELDOC_PREFIX:-/t}
 
 # 显示使用说明
 show_usage() {
@@ -67,7 +65,8 @@ start_backend() {
     
     # 启动前先尝试关闭已有服务
     if [ -f "$SCRIPT_DIR/stop.sh" ]; then
-        bash "$SCRIPT_DIR/stop.sh" backend > /dev/null 2>&1
+        echo -e "${YELLOW}正在检查并停止已有后端服务...${NC}"
+        bash "$SCRIPT_DIR/stop.sh" backend
     fi
     
     # 检查 backend 目录
@@ -95,25 +94,55 @@ start_backend() {
     
     # 启动后端
     cd "$SCRIPT_DIR/backend"
+    # 清空旧日志
+    echo "" > "$BACKEND_LOG_FILE"
     # 显式指定 --host 0.0.0.0 确保监听所有网卡
     nohup python3 main.py --host 0.0.0.0 > "$BACKEND_LOG_FILE" 2>&1 &
     echo $! > "$BACKEND_PID_FILE"
     cd "$SCRIPT_DIR"
     
-    sleep 2
+    echo -e "${YELLOW}正在等待后端服务启动...${NC}"
     
-    if ps -p $(cat "$BACKEND_PID_FILE") > /dev/null 2>&1; then
+    # 循环检查日志，等待服务启动成功
+    local timeout=30
+    local count=0
+    local started=false
+    
+    while [ $count -lt $timeout ]; do
+        if grep -q "Uvicorn running on" "$BACKEND_LOG_FILE"; then
+            started=true
+            break
+        fi
+        
+        # 检查进程是否还活着
+        if ! ps -p $(cat "$BACKEND_PID_FILE") > /dev/null 2>&1; then
+            echo -e "${RED}后端进程意外退出${NC}"
+            break
+        fi
+        
+        sleep 1
+        count=$((count + 1))
+        echo -ne "."
+    done
+    echo ""
+    
+    if [ "$started" = true ]; then
         local actual_port=$(grep -oE "port=[0-9]+" "$BACKEND_LOG_FILE" | cut -d= -f2 | head -1)
         actual_port=${actual_port:-58273}
         echo -e "${GREEN}✓ 后端服务启动成功 (PID: $(cat "$BACKEND_PID_FILE"))${NC}"
         echo -e "${GREEN}  本地访问: http://127.0.0.1:$actual_port${NC}"
         echo -e "${GREEN}  全网监听: http://0.0.0.0:$actual_port${NC}"
-        echo -e "${GREEN}  API前缀: $EASY_BABELDOC_PREFIX/api${NC}"
         echo -e "${GREEN}  日志文件: $BACKEND_LOG_FILE${NC}"
         return 0
     else
-        echo -e "${RED}✗ 后端服务启动失败，请查看日志: $BACKEND_LOG_FILE${NC}"
-        rm -f "$BACKEND_PID_FILE"
+        echo -e "${RED}✗ 后端服务启动超时或失败，请查看日志: $BACKEND_LOG_FILE${NC}"
+        # 尝试显示日志最后几行
+        tail -n 10 "$BACKEND_LOG_FILE"
+        # 清理残留进程
+        if [ -f "$BACKEND_PID_FILE" ]; then
+            kill $(cat "$BACKEND_PID_FILE") > /dev/null 2>&1
+            rm -f "$BACKEND_PID_FILE"
+        fi
         return 1
     fi
 }
@@ -128,7 +157,8 @@ start_frontend() {
     
     # 启动前先尝试关闭已有服务
     if [ -f "$SCRIPT_DIR/stop.sh" ]; then
-        bash "$SCRIPT_DIR/stop.sh" frontend > /dev/null 2>&1
+        echo -e "${YELLOW}正在检查并停止已有前端服务...${NC}"
+        bash "$SCRIPT_DIR/stop.sh" frontend
     fi
     
     # 检查 node_modules
@@ -168,7 +198,6 @@ start_frontend() {
         echo -e "${GREEN}✓ 前端服务启动成功 (PID: $(cat "$FRONTEND_PID_FILE"))${NC}"
         echo -e "${GREEN}  本地访问: http://127.0.0.1:4173${NC}"
         echo -e "${GREEN}  全网监听: http://0.0.0.0:4173${NC}"
-        echo -e "${GREEN}  访问路径: /t/${NC}"
         echo -e "${GREEN}  日志文件: $FRONTEND_LOG_FILE${NC}"
         return 0
     else
@@ -189,6 +218,12 @@ start_dev() {
     if [ $? -ne 0 ]; then
         echo -e "${RED}后端启动失败，退出${NC}"
         exit 1
+    fi
+    
+    # 尝试停止已有的后台前端服务
+    if [ -f "$SCRIPT_DIR/stop.sh" ]; then
+        echo -e "${YELLOW}正在检查并停止后台前端服务...${NC}"
+        bash "$SCRIPT_DIR/stop.sh" frontend > /dev/null 2>&1
     fi
     
     echo ""
