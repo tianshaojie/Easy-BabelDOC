@@ -65,8 +65,9 @@ start_backend() {
     echo -e "${GREEN}启动后端服务...${NC}"
     echo -e "${GREEN}========================================${NC}"
     
-    if check_running "$BACKEND_PID_FILE" "后端服务"; then
-        return 0
+    # 启动前先尝试关闭已有服务
+    if [ -f "$SCRIPT_DIR/stop.sh" ]; then
+        bash "$SCRIPT_DIR/stop.sh" backend > /dev/null 2>&1
     fi
     
     # 检查 backend 目录
@@ -125,8 +126,9 @@ start_frontend() {
     echo -e "${GREEN}启动前端服务...${NC}"
     echo -e "${GREEN}========================================${NC}"
     
-    if check_running "$FRONTEND_PID_FILE" "前端服务"; then
-        return 0
+    # 启动前先尝试关闭已有服务
+    if [ -f "$SCRIPT_DIR/stop.sh" ]; then
+        bash "$SCRIPT_DIR/stop.sh" frontend > /dev/null 2>&1
     fi
     
     # 检查 node_modules
@@ -226,6 +228,12 @@ case "$COMMAND" in
     all|"")
         start_backend
         BACKEND_STATUS=$?
+        
+        if [ $BACKEND_STATUS -ne 0 ]; then
+            echo -e "${RED}✗ 后端服务启动失败，跳过前端服务启动${NC}"
+            exit 1
+        fi
+        
         echo ""
         start_frontend $FORCE_REBUILD
         FRONTEND_STATUS=$?
@@ -249,6 +257,12 @@ case "$COMMAND" in
             # --rebuild 作为第一个参数时，启动所有服务并重新构建
             start_backend
             BACKEND_STATUS=$?
+            
+            if [ $BACKEND_STATUS -ne 0 ]; then
+                echo -e "${RED}✗ 后端服务启动失败，跳过前端服务启动${NC}"
+                exit 1
+            fi
+            
             echo ""
             start_frontend true
             FRONTEND_STATUS=$?
