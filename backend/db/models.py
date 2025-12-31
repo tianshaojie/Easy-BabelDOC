@@ -328,3 +328,24 @@ class User:
         except Exception as e:
             print(f"更新登录时间失败: {e}")
             return False
+
+    def update_password(self, username: str, new_password: str) -> bool:
+        """更新用户密码
+        
+        Args:
+            username: 用户名
+            new_password: 新密码
+            
+        Returns:
+            是否更新成功
+        """
+        try:
+            password_hash = self.hash_password(new_password)
+            self.db.execute(
+                "UPDATE users SET password_hash = ? WHERE username = ?",
+                (password_hash, username)
+            )
+            return True
+        except Exception as e:
+            print(f"更新密码失败: {e}")
+            return False
