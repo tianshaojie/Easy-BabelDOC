@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Activity as ProgressIcon, Clock, X, AlertCircle, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -27,59 +27,43 @@ const Progress = () => {
   const [logs, setLogs] = useState<string[]>([])
   const [isConnected, setIsConnected] = useState(false)
 
-  useEffect(() => {
-    if (!taskId) return
-
-    // 获取初始状态
-    fetchStatus()
-
-    // 建立WebSocket连接
-    const wsUrl = API_ENDPOINTS.translationWs(taskId)
-    console.log('Connecting to WebSocket:', wsUrl)
-    const ws = new WebSocket(wsUrl)
-    
-    ws.onopen = () => {
-      setIsConnected(true)
-      console.log('WebSocket connected successfully to:', wsUrl)
-    }
-
-    ws.onmessage = (event) => {
-      console.log('WebSocket message received:', event.data)
-      try {
-        const data = JSON.parse(event.data)
-        handleWebSocketMessage(data)
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error, event.data)
-      }
-    }
-
-    ws.onclose = (event) => {
-      setIsConnected(false)
-      console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason)
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error occurred:', error)
-      setIsConnected(false)
-    }
-
-    // 定期轮询状态（作为WebSocket的备用方案）
-    const interval = setInterval(fetchStatus, 5000)
-
-    return () => {
-      ws.close()
-      clearInterval(interval)
-    }
-  }, [taskId])
-
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     if (!taskId) return
 
     try {
       const response = await fetch(API_ENDPOINTS.translationStatus(taskId))
       if (response.ok) {
         const data = await response.json()
-        setStatus(data)
+        console.log('Fetched status:', data)
+        
+        // 确保必需字段存在且类型正确
+        const normalizedData = {
+          ...data,
+          progress: typeof data.progress === 'number' ? data.progress : 0,
+          stage: String(data.stage || '未知'),
+          message: typeof data.message === 'string' ? data.message : '',
+          error: data.error ? String(data.error) : undefined
+        }
+        
+        setStatus(prev => {
+          // 只在首次获取到错误状态时添加日志和显示toast
+          const isFirstError = prev?.status !== 'error' && data.status === 'error'
+          
+          if (isFirstError && data.error) {
+            const timestamp = new Date().toLocaleTimeString()
+            setLogs(prevLogs => {
+              const errorLog = `${timestamp} - [错误] ${data.error}`
+              // 避免重复添加相同的错误日志
+              if (!prevLogs.some(log => log.includes(data.error))) {
+                return [errorLog, ...prevLogs]
+              }
+              return prevLogs
+            })
+            toast.error(`翻译失败: ${data.error}`)
+          }
+          
+          return normalizedData
+        })
         
         // 如果翻译完成，跳转到结果页面
         if (data.status === 'completed') {
@@ -91,13 +75,25 @@ const Progress = () => {
     } catch (error) {
       console.error('Failed to fetch status:', error)
     }
-  }
+  }, [taskId, navigate])
 
-  const handleWebSocketMessage = (data: any) => {
+  const handleWebSocketMessage = useCallback((data: {
+    type: string
+    overall_progress?: number
+    stage?: string
+    message?: string
+    translate_result?: {
+      mono_pdf_path: string
+      dual_pdf_path: string
+      total_seconds: number
+      peak_memory_usage: number
+    }
+    error?: string
+  }) => {
     if (data.type === 'progress_update') {
       const newProgress = data.overall_progress || 0
-      const newStage = data.stage || (status?.stage || '')
-      const newMessage = data.message || (status?.message || '')
+      const newStage = data.stage || ''
+      const newMessage = data.message || ''
       
       setStatus(prev => prev ? {
         ...prev,
@@ -129,20 +125,112 @@ const Progress = () => {
         navigate(`/result/${taskId}`)
       }, 2000)
     } else if (data.type === 'error') {
+      const errorMsg = data.error || '未知错误'
       setStatus(prev => prev ? {
         ...prev,
         status: 'error',
-        error: data.error,
+        error: errorMsg,
         end_time: new Date().toISOString()
       } : null)
       
       // 添加错误日志
       const timestamp = new Date().toLocaleTimeString()
-      setLogs(prev => [`${timestamp} - [错误] ${data.error}`, ...prev])
+      setLogs(prev => [`${timestamp} - [错误] ${errorMsg}`, ...prev])
       
-      toast.error('翻译失败')
+      toast.error(`翻译失败: ${errorMsg}`)
     }
-  }
+  }, [taskId, navigate])
+
+  useEffect(() => {
+    if (!taskId) return
+
+    let ws: WebSocket | null = null
+    let interval: NodeJS.Timeout | null = null
+    let shouldPoll = true
+
+    // 获取初始状态
+    fetchStatus()
+
+    // 建立WebSocket连接
+    const wsUrl = API_ENDPOINTS.translationWs(taskId)
+    console.log('Connecting to WebSocket:', wsUrl)
+    ws = new WebSocket(wsUrl)
+    
+    ws.onopen = () => {
+      setIsConnected(true)
+      console.log('WebSocket connected successfully to:', wsUrl)
+    }
+
+    ws.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data)
+      try {
+        const data = JSON.parse(event.data)
+        handleWebSocketMessage(data)
+        
+        // 如果任务完成或失败，停止轮询
+        if (data.type === 'finish' || data.type === 'error') {
+          shouldPoll = false
+          if (interval) {
+            clearInterval(interval)
+            interval = null
+          }
+        }
+      } catch (error) {
+        console.error('Failed to parse WebSocket message:', error, event.data)
+      }
+    }
+
+    ws.onclose = (event) => {
+      setIsConnected(false)
+      console.log('WebSocket disconnected. Code:', event.code, 'Reason:', event.reason)
+    }
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error occurred:', error)
+      setIsConnected(false)
+    }
+
+    // 定期轮询状态（作为WebSocket的备用方案）
+    interval = setInterval(async () => {
+      if (!shouldPoll) {
+        if (interval) {
+          clearInterval(interval)
+          interval = null
+        }
+        return
+      }
+      
+      try {
+        const response = await fetch(API_ENDPOINTS.translationStatus(taskId))
+        if (response.ok) {
+          const data = await response.json()
+          // 如果任务完成或失败，停止轮询
+          if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
+            shouldPoll = false
+            if (interval) {
+              clearInterval(interval)
+              interval = null
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error)
+      }
+      
+      fetchStatus()
+    }, 5000)
+
+    return () => {
+      shouldPoll = false
+      if (ws) {
+        ws.close()
+      }
+      if (interval) {
+        clearInterval(interval)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId])
 
   const cancelTranslation = async () => {
     if (!taskId || !window.confirm('确定要取消翻译吗？')) return
@@ -268,9 +356,9 @@ const Progress = () => {
                 {status.status === 'error' && (
                   <AlertCircle className="h-4 w-4 text-red-600" />
                 )}
-                <span className="font-medium text-gray-900">{status.stage}</span>
+                <span className="font-medium text-gray-900">{String(status.stage || '')}</span>
               </div>
-              {status.message && (
+              {status.message && typeof status.message === 'string' && (
                 <p className="text-sm text-gray-600">{status.message}</p>
               )}
             </div>
@@ -283,7 +371,7 @@ const Progress = () => {
                 <AlertCircle className="h-5 w-5 text-red-600" />
                 <h3 className="font-medium text-red-900">翻译失败</h3>
               </div>
-              <p className="text-sm text-red-700">{status.error}</p>
+              <p className="text-sm text-red-700">{String(status.error)}</p>
             </div>
           )}
 
@@ -340,7 +428,7 @@ const Progress = () => {
                   {formatDuration(getElapsedTime())}
                 </span>
               </div>
-              {status.result && (
+              {status.result && status.result.total_seconds !== undefined && (
                 <div>
                   <span className="text-sm font-medium text-gray-700">总耗时：</span>
                   <span className="ml-2 text-sm text-gray-600">
@@ -348,7 +436,7 @@ const Progress = () => {
                   </span>
                 </div>
               )}
-              {status.result && (
+              {status.result && status.result.peak_memory_usage !== undefined && (
                 <div>
                   <span className="text-sm font-medium text-gray-700">峰值内存：</span>
                   <span className="ml-2 text-sm text-gray-600">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Download, FileText, Clock, MemoryStick, CheckCircle, AlertCircle, Home } from 'lucide-react'
 import { toast } from 'sonner'
@@ -26,12 +26,7 @@ const Result = () => {
   const [loading, setLoading] = useState(true)
   const [downloading, setDownloading] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!taskId) return
-    fetchResult()
-  }, [taskId])
-
-  const fetchResult = async () => {
+  const fetchResult = useCallback(async () => {
     if (!taskId) return
 
     try {
@@ -53,7 +48,11 @@ const Result = () => {
     } finally {
       setLoading(false)
     }
-  }
+  }, [taskId, navigate])
+
+  useEffect(() => {
+    fetchResult()
+  }, [fetchResult])
 
   const downloadFile = async (type: 'mono' | 'dual') => {
     if (!taskId || !result?.result) return
@@ -303,7 +302,7 @@ const Result = () => {
           {result.error && (
             <div className="mb-4">
               <h3 className="font-medium text-red-900 mb-2">错误信息：</h3>
-              <p className="text-red-700 bg-red-100 p-3 rounded border">{result.error}</p>
+              <p className="text-red-700 bg-red-100 p-3 rounded border">{String(result.error)}</p>
             </div>
           )}
           

@@ -31,6 +31,15 @@ class TranslationHistory:
             config_json = json.dumps(task_data.get('config', {}), ensure_ascii=False)
             result_json = json.dumps(task_data.get('result', {}), ensure_ascii=False) if task_data.get('result') else None
             
+            # 处理error字段，确保是字符串
+            error_value = task_data.get('error')
+            if isinstance(error_value, dict):
+                error_value = '' if not error_value else str(error_value)
+            elif error_value is None:
+                error_value = ''
+            else:
+                error_value = str(error_value)
+            
             self.db.execute("""
                 INSERT INTO translation_history 
                 (task_id, user_id, status, filename, source_lang, target_lang, model, 
@@ -49,7 +58,7 @@ class TranslationHistory:
                 task_data.get('progress', 0),
                 task_data.get('stage'),
                 task_data.get('message'),
-                task_data.get('error'),
+                error_value,
                 config_json,
                 result_json
             ))
@@ -75,6 +84,19 @@ class TranslationHistory:
             for key, value in updates.items():
                 if key in ['config', 'result'] and isinstance(value, dict):
                     value = json.dumps(value, ensure_ascii=False)
+                elif key == 'error':
+                    # 特殊处理error字段，确保是字符串
+                    if isinstance(value, dict):
+                        if not value:  # 空字典
+                            value = ''
+                        else:
+                            value = str(value)
+                    elif value is None:
+                        value = ''
+                    else:
+                        value = str(value)
+                elif not isinstance(value, (str, int, float, bool, type(None))):
+                    value = str(value)
                 set_clauses.append(f"{key} = ?")
                 params.append(value)
             
@@ -193,6 +215,20 @@ class TranslationHistory:
                 data['result'] = json.loads(data['result'])
             except:
                 data['result'] = None
+        
+        # 确保error字段是字符串而不是JSON对象
+        if data.get('error'):
+            if isinstance(data['error'], str):
+                try:
+                    # 尝试解析JSON，如果是空对象则转换为空字符串
+                    parsed_error = json.loads(data['error'])
+                    if isinstance(parsed_error, dict) and not parsed_error:
+                        data['error'] = ''
+                    else:
+                        data['error'] = str(parsed_error)
+                except:
+                    # 如果不是JSON，保持原样
+                    pass
         
         data.pop('created_at', None)
         data.pop('updated_at', None)
