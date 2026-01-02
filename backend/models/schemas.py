@@ -10,7 +10,7 @@ class TranslationRequest(BaseModel):
     api_key: str
     base_url: Optional[str] = None
     pages: Optional[str] = None
-    qps: Optional[int] = 1
+    qps: Optional[int] = 5
     no_dual: bool = False
     no_mono: bool = False
     debug: bool = False
@@ -20,7 +20,7 @@ class TranslatorConfig(BaseModel):
     api_key: str
     model: str = "gpt-4o-mini"
     base_url: Optional[str] = None
-    qps: int = 1
+    qps: int = 5
 
 class GlossaryInfo(BaseModel):
     id: str

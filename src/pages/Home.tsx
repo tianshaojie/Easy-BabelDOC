@@ -53,7 +53,7 @@ const Home = () => {
     model: 'gpt-4o-mini',
     base_url: '',
     pages: '',
-    qps: 1,
+    qps: 5,
     no_dual: false,
     no_mono: false,
     debug: false,
@@ -139,7 +139,7 @@ const Home = () => {
     const loadSettings = () => {
       const savedDefaultSourceLang = localStorage.getItem('babeldoc_default_source_lang') || 'en'
       const savedDefaultTargetLang = localStorage.getItem('babeldoc_default_target_lang') || 'zh'
-      const savedDefaultQps = parseInt(localStorage.getItem('babeldoc_default_qps') || '1')
+      const savedDefaultQps = parseInt(localStorage.getItem('babeldoc_default_qps_v2') || '5')
 
       setConfig(prev => ({
         ...prev,
@@ -475,9 +475,9 @@ const Home = () => {
                 <input
                   type="number"
                   min="1"
-                  max="10"
+                  max="50"
                   value={config.qps}
-                  onChange={(e) => setConfig({ ...config, qps: parseInt(e.target.value) || 1 })}
+                  onChange={(e) => setConfig({ ...config, qps: parseInt(e.target.value) || 5 })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent"
                 />
               </div>

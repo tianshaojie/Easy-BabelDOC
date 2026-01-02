@@ -29,7 +29,7 @@ const Settings = () => {
   const [activeTab, setActiveTab] = useState<TabType>('model')
   const [defaultSourceLang, setDefaultSourceLang] = useState('auto')
   const [defaultTargetLang, setDefaultTargetLang] = useState('zh')
-  const [defaultQps, setDefaultQps] = useState(1)
+  const [defaultQps, setDefaultQps] = useState(5)
   const [glossaries, setGlossaries] = useState<GlossaryItem[]>([])
   const [uploading, setUploading] = useState(false)
   const [savingLanguage, setSavingLanguage] = useState(false)
@@ -67,7 +67,7 @@ const Settings = () => {
   const loadSettings = () => {
     const savedSourceLang = localStorage.getItem('babeldoc_default_source_lang') || 'auto'
     const savedTargetLang = localStorage.getItem('babeldoc_default_target_lang') || 'zh'
-    const savedQps = parseInt(localStorage.getItem('babeldoc_default_qps') || '1')
+    const savedQps = parseInt(localStorage.getItem('babeldoc_default_qps_v2') || '5')
 
     setDefaultSourceLang(savedSourceLang)
     setDefaultTargetLang(savedTargetLang)
@@ -220,7 +220,7 @@ const Settings = () => {
     setSavingQps(true)
     
     try {
-      localStorage.setItem('babeldoc_default_qps', defaultQps.toString())
+      localStorage.setItem('babeldoc_default_qps_v2', defaultQps.toString())
       toast.success('QPS设置已保存')
     } catch {
       toast.error('保存QPS设置失败')
@@ -606,9 +606,9 @@ const Settings = () => {
               <input
                 type="number"
                 min="1"
-                max="10"
+                max="50"
                 value={defaultQps}
-                onChange={(e) => setDefaultQps(parseInt(e.target.value) || 1)}
+                onChange={(e) => setDefaultQps(parseInt(e.target.value) || 5)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
               />
             </div>
