@@ -71,7 +71,11 @@ async def start_translation(request: TranslationRequest, authorization: Optional
             no_mono=request.no_mono,
             qps=request.qps,
             glossaries=glossaries,
-            watermark_output_mode=False
+            watermark_output_mode=False,
+            merge_alternating_line_numbers=request.merge_alternating_line_numbers,
+            remove_non_formula_lines=request.remove_non_formula_lines,
+            split_short_lines=request.split_short_lines,
+            short_line_split_factor=request.short_line_split_factor
         )
         
         request_config = request.model_dump(exclude=SENSITIVE_CONFIG_KEYS)

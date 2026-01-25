@@ -15,6 +15,10 @@ class TranslationRequest(BaseModel):
     no_mono: bool = False
     debug: bool = False
     glossary_ids: List[str] = []
+    merge_alternating_line_numbers: bool = True
+    remove_non_formula_lines: bool = True
+    split_short_lines: bool = True
+    short_line_split_factor: float = 1.2
 
 class TranslatorConfig(BaseModel):
     api_key: str
