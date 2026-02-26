@@ -41,14 +41,28 @@ async def start_translation(request: TranslationRequest, authorization: Optional
         raise HTTPException(status_code=404, detail="文件不存在")
     
     try:
-        translator = OpenAITranslator(
-            lang_in=request.lang_in,
-            lang_out=request.lang_out,
-            model=request.model,
-            api_key=request.api_key,
-            base_url=request.base_url
-        )
+        translator_kwargs = {
+            "lang_in": request.lang_in,
+            "lang_out": request.lang_out,
+            "model": request.model,
+            "api_key": request.api_key,
+            "base_url": request.base_url
+        }
         
+        # 处理不支持 temperature=0 的特殊模型
+        model_lower = request.model.lower()
+        if "kimi" in model_lower or "o1-" in model_lower or "o3-" in model_lower:
+            translator_kwargs["send_temperature"] = False
+            
+        translator = OpenAITranslator(**translator_kwargs)
+        
+        # 如果模型明确要求 temperature 为 1，则可以在这里重新覆盖 options
+        if "kimi" in model_lower:
+            translator.options["temperature"] = 1
+            translator.send_temperature = True
+            # 更新缓存影响参数
+            translator.cache.add_params("temperature", 1)
+
         doc_layout_model = DocLayoutModel.load_onnx()
         
         glossaries = []
